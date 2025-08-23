@@ -49,7 +49,7 @@ npm run dev
 http://localhost:3000
 ```
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 **Frontend**
 - React 18 + TypeScript
@@ -116,5 +116,5 @@ PORT=5001
 Having issues? [Open an issue](https://github.com/ac1d301/formula1-hub/issues) or reach out to [diffv27l@gmail.com](mailto:diffv27@gmail.com.com)
 
 <div align="center">
-Made with ❤️ for F1 fans worldwide
+Made with passion for F1 fans INDIA
 </div>

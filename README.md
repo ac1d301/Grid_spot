@@ -1,4 +1,4 @@
-# Formula 1 Hub 🏁
+# Formula 1 GridSpot🏁
 
 A modern web application for Formula 1 enthusiasts featuring live driver statistics, race information, and community discussions.
 

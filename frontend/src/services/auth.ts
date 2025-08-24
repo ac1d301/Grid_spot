@@ -1,6 +1,8 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../config/api'; // Add this import
 
-const BASE_URL = 'http://localhost:5001/api';
+// Remove the hardcoded BASE_URL
+// const BASE_URL = 'http://localhost:5001/api';
 
 export interface User {
   id: string;
@@ -31,7 +33,7 @@ class AuthService {
 
   async register(username: string, email: string, password: string): Promise<User> {
     try {
-      const res = await axios.post(`${BASE_URL}/auth/register`, { username, email, password });
+      const res = await axios.post(`${API_BASE_URL}/auth/register`, { username, email, password });
       this.setToken(res.data.token);
       return res.data.user;
     } catch (error) {
@@ -42,7 +44,7 @@ class AuthService {
 
   async login(email: string, password: string): Promise<User> {
     try {
-      const res = await axios.post(`${BASE_URL}/auth/login`, { email, password });
+      const res = await axios.post(`${API_BASE_URL}/auth/login`, { email, password });
       this.setToken(res.data.token);
       return res.data.user;
     } catch (error) {
@@ -54,7 +56,7 @@ class AuthService {
   async getCurrentUser(): Promise<User> {
     if (!this.token) throw new Error('No token');
     try {
-      const res = await axios.get(`${BASE_URL}/auth/me`, {
+      const res = await axios.get(`${API_BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${this.token}` }
       });
       return res.data.user;

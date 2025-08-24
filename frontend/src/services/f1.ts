@@ -1,16 +1,20 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../config/api'; // Add this import
 
-const BASE_URL = '/api/openf1';
+// Update the BASE_URL to use dynamic API
+const BASE_URL = `${API_BASE_URL}/openf1`; // Use dynamic base URL
 
 export const f1Service = {
   async getDrivers() {
     const res = await axios.get(`${BASE_URL}/drivers`);
     return res.data;
   },
+
   async getDriverResults(driverNumber: number) {
     const res = await axios.get(`${BASE_URL}/results`, { params: { driver_number: driverNumber } });
     return res.data;
   },
+
   async getDriverSessions(driverNumber: number, year?: number) {
     const params: any = { driver_number: driverNumber };
     if (year) params.year = year;

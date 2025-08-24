@@ -6,8 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw } from 'lucide-react';
-import { API_BASE_URL } from '../config/api'; // Add this import
 
 interface DriverStanding {
   driverId: string;
@@ -41,15 +39,15 @@ interface FilterOptions {
 
 type OpenF1Session = {
   session_key: number;
-  session_name?: string; // "Race", "Sprint", etc.
-  session_type?: string; // "Race", "Sprint", etc.
+  session_name?: string;     // "Race", "Sprint", etc.
+  session_type?: string;     // "Race", "Sprint", etc.
 };
 
 type OpenF1Result = {
   driver_number?: number;
-  position?: number | string; // sometimes string ("R", "DQ") or number
+  position?: number | string;         // sometimes string ("R", "DQ") or number
   fastest_lap_rank?: number;
-  fastest_lap?: number; // sometimes used as a boolean-ish 1
+  fastest_lap?: number;               // sometimes used as a boolean-ish 1
   fastest_lap_time_ms?: number;
   best_lap_time_ms?: number;
   best_lap_time?: number;
@@ -234,7 +232,182 @@ const Ratings = () => {
       careerPoles: 0,
       headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/E/ESTOCO01_Esteban_Ocon/estoco01.png.transform/1col/image.png'
     },
-    // ... (include the rest of your driver standings here)
+    {
+      driverId: 'alonso',
+      permanentNumber: 14,
+      givenName: 'Fernando',
+      familyName: 'Alonso',
+      nationality: 'ESP',
+      team: 'Aston Martin',
+      teamColor: '229971',
+      position: 11,
+      points: 26,
+      wins: 0,
+      careerWins: 32,
+      careerPodiums: 106,
+      careerPoles: 22,
+      headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/F/FERALO01_Fernando_Alonso/feralo01.png.transform/1col/image.png'
+    },
+    {
+      driverId: 'stroll',
+      permanentNumber: 18,
+      givenName: 'Lance',
+      familyName: 'Stroll',
+      nationality: 'CAN',
+      team: 'Aston Martin',
+      teamColor: '229971',
+      position: 12,
+      points: 26,
+      wins: 0,
+      careerWins: 0,
+      careerPodiums: 3,
+      careerPoles: 1,
+      headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/L/LANSTR01_Lance_Stroll/lanstr01.png.transform/1col/image.png'
+    },
+    {
+      driverId: 'hadjar',
+      permanentNumber: 6,
+      givenName: 'Isack',
+      familyName: 'Hadjar',
+      nationality: 'FRA',
+      team: 'Racing Bulls',
+      teamColor: '6692FF',
+      position: 13,
+      points: 22,
+      wins: 0,
+      careerWins: 0,
+      careerPodiums: 0,
+      careerPoles: 0,
+      headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/I/ISAHAD01_Isack_Hadjar/isahad01.png.transform/1col/image.png'
+    },
+    {
+      driverId: 'gasly',
+      permanentNumber: 10,
+      givenName: 'Pierre',
+      familyName: 'Gasly',
+      nationality: 'FRA',
+      team: 'Alpine',
+      teamColor: '0093CC',
+      position: 14,
+      points: 20,
+      wins: 0,
+      careerWins: 1,
+      careerPodiums: 4,
+      careerPoles: 0,
+      headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/P/PIEGAS01_Pierre_Gasly/piegas01.png.transform/1col/image.png'
+    },
+    {
+      driverId: 'lawson',
+      permanentNumber: 30,
+      givenName: 'Liam',
+      familyName: 'Lawson',
+      nationality: 'NZL',
+      team: 'Racing Bulls',
+      teamColor: '6692FF',
+      position: 15,
+      points: 20,
+      wins: 0,
+      careerWins: 0,
+      careerPodiums: 0,
+      careerPoles: 0,
+      headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/L/LIALAW01_Liam_Lawson/lialaw01.png.transform/1col/image.png'
+    },
+    {
+      driverId: 'sainz',
+      permanentNumber: 55,
+      givenName: 'Carlos',
+      familyName: 'Sainz Jr',
+      nationality: 'ESP',
+      team: 'Williams',
+      teamColor: '64C4FF',
+      position: 16,
+      points: 16,
+      wins: 0,
+      careerWins: 4,
+      careerPodiums: 25,
+      careerPoles: 6,
+      headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/C/CARSAI01_Carlos_Sainz/carsai01.png.transform/1col/image.png'
+    },
+    {
+      driverId: 'bortoleto',
+      permanentNumber: 5,
+      givenName: 'Gabriel',
+      familyName: 'Bortoleto',
+      nationality: 'BRA',
+      team: 'Kick Sauber',
+      teamColor: '52E252',
+      position: 17,
+      points: 14,
+      wins: 0,
+      careerWins: 0,
+      careerPodiums: 0,
+      careerPoles: 0,
+      headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/G/GABORT01_Gabriel_Bortoleto/gabort01.png.transform/1col/image.png'
+    },
+    {
+      driverId: 'tsunoda',
+      permanentNumber: 22,
+      givenName: 'Yuki',
+      familyName: 'Tsunoda',
+      nationality: 'JPN',
+      team: 'Red Bull Racing',
+      teamColor: '3671C6',
+      position: 18,
+      points: 10,
+      wins: 0,
+      careerWins: 0,
+      careerPodiums: 0,
+      careerPoles: 0,
+      headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/Y/YUKTSU01_Yuki_Tsunoda/yuktsu01.png.transform/1col/image.png'
+    },
+    {
+      driverId: 'bearman',
+      permanentNumber: 87,
+      givenName: 'Oliver',
+      familyName: 'Bearman',
+      nationality: 'GBR',
+      team: 'Haas',
+      teamColor: 'B6BABD',
+      position: 19,
+      points: 8,
+      wins: 0,
+      careerWins: 0,
+      careerPodiums: 0,
+      careerPoles: 0,
+      headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/O/OLIBEA01_Oliver_Bearman/olibea01.png.transform/1col/image.png'
+    },
+    {
+      driverId: 'colapinto',
+      permanentNumber: 43,
+      givenName: 'Franco',
+      familyName: 'Colapinto',
+      nationality: 'ARG',
+      team: 'Alpine',
+      teamColor: '0093CC',
+      position: 20,
+      points: 0,
+      wins: 0,
+      careerWins: 0,
+      careerPodiums: 0,
+      careerPoles: 0,
+      headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/F/FRACOL01_Franco_Colapinto/fracol01.png.transform/1col/image.png'
+    },
+    {
+      driverId: 'doohan',
+      permanentNumber: 7,
+      givenName: 'Jack',
+      familyName: 'Doohan',
+      nationality: 'AUS',
+      team: 'Alpine',
+      teamColor: '0093CC',
+      position: 21,
+      points: 0,
+      wins: 0,
+      careerWins: 0,
+      careerPodiums: 0,
+      careerPoles: 0,
+      headshot_url: 'https://www.formula1.com/content/dam/fom-website/drivers/J/JACDOO01_Jack_Doohan/jacdoo01.png.transform/1col/image.png'
+    }
   ];
 
   // ---- Utils for points calculation ----
@@ -267,7 +440,6 @@ const Ratings = () => {
         (typeof r.best_lap_time === 'number' && r.best_lap_time) ??
         (typeof r.fastest_lap_time === 'number' && r.fastest_lap_time) ??
         null;
-
       if (r.driver_number && typeof ms === 'number' && Number.isFinite(ms)) {
         if (!best || ms < best.ms) best = { driver: r.driver_number, ms };
       }
@@ -275,32 +447,12 @@ const Ratings = () => {
     return best ? best.driver : null;
   };
 
-  // Updated fetchLiveStandings function with backend integration
+  // ---- Live standings flow ----
   const fetchLiveStandings = async () => {
     setLoading(true);
     setError(null);
-
     try {
-      console.log('🔍 Fetching live standings...');
-
-      // Try to fetch from backend API first
-      try {
-        const response = await fetch(`${API_BASE_URL}/ratings/stats/season/${currentYear}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.standings && Array.isArray(data.standings) && data.standings.length > 0) {
-            console.log('✅ Using backend calculated standings');
-            setStandings(data.standings);
-            setFilteredStandings(data.standings);
-            setLastUpdated(new Date(data.lastUpdated || new Date()));
-            return;
-          }
-        }
-      } catch (backendError) {
-        console.log('⚠️ Backend fetch failed, calculating from OpenF1 directly:', backendError);
-      }
-
-      // Fallback: Calculate from OpenF1 API directly (your existing logic)
+      // Get both Race and Sprint sessions
       const urls = [
         `https://api.openf1.org/v1/sessions?year=${currentYear}&session_type=Race`,
         `https://api.openf1.org/v1/sessions?year=${currentYear}&session_type=Sprint`,
@@ -312,7 +464,7 @@ const Ratings = () => {
           const r = await fetch(url);
           if (!r.ok) throw new Error(`Failed ${url}`);
           const sess = (await r.json()) as OpenF1Session[];
-
+          // Safety: only keep Race or Sprint by either field
           const filtered = sess.filter(
             (s) =>
               (s.session_type && (s.session_type === 'Race' || s.session_type === 'Sprint')) ||
@@ -343,13 +495,12 @@ const Ratings = () => {
             const sorted = results
               .map((r) => ({ ...r, _pos: toNumericPos(r.position) }))
               .filter((r) => r._pos !== null)
-              .sort((a, b) => a._pos! - b._pos!);
+              .sort((a, b) => (a._pos! - b._pos!));
 
             for (const r of sorted.slice(0, 8)) {
               const dn = r.driver_number;
               const pos = r._pos!;
               if (!dn) continue;
-
               const inc = SPRINT_POINTS[pos - 1] ?? 0;
               if (inc <= 0) continue;
 
@@ -362,15 +513,15 @@ const Ratings = () => {
             const sorted = results
               .map((r) => ({ ...r, _pos: toNumericPos(r.position) }))
               .filter((r) => r._pos !== null)
-              .sort((a, b) => a._pos! - b._pos!);
+              .sort((a, b) => (a._pos! - b._pos!));
 
             // Assign race points
             sorted.slice(0, 10).forEach((r) => {
               const dn = r.driver_number;
               const pos = r._pos!;
               if (!dn) return;
-
               const inc = RACE_POINTS[pos - 1] ?? 0;
+
               const cur = agg.get(dn) || { points: 0, wins: 0 };
               cur.points += inc;
               if (pos === 1) cur.wins += 1;
@@ -410,38 +561,13 @@ const Ratings = () => {
       setStandings(finalStandings);
       setFilteredStandings(finalStandings);
       setLastUpdated(new Date());
-
     } catch (err) {
-      console.error('Failed to fetch live standings:', err);
+      console.error('Failed to calculate live standings:', err);
       setError('Using cached standings data');
       setStandings(OFFICIAL_2025_STANDINGS);
       setFilteredStandings(OFFICIAL_2025_STANDINGS);
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Add a function to refresh backend cache
-  const refreshBackendCache = async () => {
-    try {
-      const token = localStorage.getItem('f1_token'); // Adjust token key as needed
-      const response = await fetch(`${API_BASE_URL}/ratings/stats/refresh`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        console.log('✅ Backend cache refreshed');
-        // Re-fetch standings after refresh
-        await fetchLiveStandings();
-      }
-    } catch (error) {
-      console.log('⚠️ Failed to refresh backend cache:', error);
-      // Fallback to normal fetch
-      await fetchLiveStandings();
     }
   };
 
@@ -578,11 +704,6 @@ const Ratings = () => {
   const uniqueTeams = [...new Set(standings.map(d => d.team))].sort();
   const uniqueNationalities = [...new Set(standings.map(d => d.nationality))].sort();
 
-  // Manual refresh handler
-  const handleManualRefresh = () => {
-    refreshBackendCache();
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -590,7 +711,7 @@ const Ratings = () => {
           <div className="container mx-auto px-4">
             <div className="text-center mb-8">
               <h1 className="text-4xl md:text-5xl font-bold mb-4">
-                F1 DRIVERS <span className="text-red-600">{currentYear}</span>
+                F1 DRIVERS <span className="f1-gradient bg-clip-text text-transparent">{currentYear}</span>
               </h1>
               <p className="text-xl text-muted-foreground">
                 Loading live championship standings...
@@ -615,40 +736,28 @@ const Ratings = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-8">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">
-              F1 DRIVERS <span className="text-red-600">{currentYear}</span>
+              F1 DRIVERS <span className="f1-gradient bg-clip-text text-transparent">{currentYear}</span>
             </h1>
-            <p className="text-xl text-muted-foreground mb-4">
+            <p className="text-xl text-muted-foreground">
               Live championship standings for the {currentYear} season
             </p>
-
-            <div className="flex items-center justify-center gap-4 text-sm">
-              <span>Showing {filteredStandings.length} of {standings.length} drivers</span>
+            <div className="flex items-center justify-center gap-4 mt-2">
+              <p className="text-sm text-muted-foreground">
+                Showing {filteredStandings.length} of {standings.length} drivers
+              </p>
               {lastUpdated && (
-                <span className="text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Last updated: {lastUpdated.toLocaleTimeString()}
-                </span>
+                </p>
               )}
-              <Button
-                onClick={handleManualRefresh}
-                variant="outline"
-                size="sm"
-                className="ml-2"
-              >
-                <RefreshCw className="h-4 w-4 mr-1" />
-                Refresh
-              </Button>
-            </div>
-
-            {error && (
-              <div className="mt-2">
-                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+              {error && (
+                <Badge variant="outline" className="text-orange-600">
                   {error}
                 </Badge>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
-          {/* Sorting Controls */}
           <div className="flex flex-wrap gap-2 justify-center mb-6">
             <Button
               variant={sortBy === 'points' ? 'default' : 'outline'}
@@ -674,26 +783,22 @@ const Ratings = () => {
             >
               By Career Poles
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
-            >
-              {showFilters ? 'Hide Filters' : 'Show Filters'}
-            </Button>
+          </div>
+
+          <div className="text-center mb-6">
             {Object.keys(filters).length > 0 && (
               <Button
                 variant="ghost"
                 onClick={clearFilters}
-                className="text-red-600 hover:text-red-700"
+                className="ml-2 text-destructive"
               >
                 Clear All Filters
               </Button>
             )}
           </div>
 
-          {/* Advanced Filters */}
           {showFilters && (
-            <div className="mb-6 p-4 border rounded-lg">
+            <div className="bg-card p-6 rounded-lg border mb-6">
               <h3 className="text-lg font-semibold mb-4">Advanced Filters</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
@@ -727,7 +832,7 @@ const Ratings = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="min-points">Min Season Points</Label>
+                  <Label htmlFor="points-filter">Min Season Points</Label>
                   <Input
                     type="number"
                     placeholder="Min points"
@@ -737,7 +842,17 @@ const Ratings = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="min-wins">Min Career Wins</Label>
+                  <Label htmlFor="points-filter-max">Max Season Points</Label>
+                  <Input
+                    type="number"
+                    placeholder="Max points"
+                    value={filters.maxPoints || ''}
+                    onChange={(e) => setFilters(prev => ({ ...prev, maxPoints: e.target.value ? parseInt(e.target.value) : undefined }))}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="career-wins-filter">Min Career Wins</Label>
                   <Input
                     type="number"
                     placeholder="Min wins"
@@ -745,20 +860,69 @@ const Ratings = () => {
                     onChange={(e) => setFilters(prev => ({ ...prev, minCareerWins: e.target.value ? parseInt(e.target.value) : undefined }))}
                   />
                 </div>
+
+                <div>
+                  <Label htmlFor="career-wins-filter-max">Max Career Wins</Label>
+                  <Input
+                    type="number"
+                    placeholder="Max wins"
+                    value={filters.maxCareerWins || ''}
+                    onChange={(e) => setFilters(prev => ({ ...prev, maxCareerWins: e.target.value ? parseInt(e.target.value) : undefined }))}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="career-podiums-filter">Min Career Podiums</Label>
+                  <Input
+                    type="number"
+                    placeholder="Min podiums"
+                    value={filters.minCareerPodiums || ''}
+                    onChange={(e) => setFilters(prev => ({ ...prev, minCareerPodiums: e.target.value ? parseInt(e.target.value) : undefined }))}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="career-podiums-filter-max">Max Career Podiums</Label>
+                  <Input
+                    type="number"
+                    placeholder="Max podiums"
+                    value={filters.maxCareerPodiums || ''}
+                    onChange={(e) => setFilters(prev => ({ ...prev, maxCareerPodiums: e.target.value ? parseInt(e.target.value) : undefined }))}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="career-poles-filter">Min Career Poles</Label>
+                  <Input
+                    type="number"
+                    placeholder="Min poles"
+                    value={filters.minCareerPoles || ''}
+                    onChange={(e) => setFilters(prev => ({ ...prev, minCareerPoles: e.target.value ? parseInt(e.target.value) : undefined }))}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="career-poles-filter-max">Max Career Poles</Label>
+                  <Input
+                    type="number"
+                    placeholder="Max poles"
+                    value={filters.maxCareerPoles || ''}
+                    onChange={(e) => setFilters(prev => ({ ...prev, maxCareerPoles: e.target.value ? parseInt(e.target.value) : undefined }))}
+                  />
+                </div>
               </div>
             </div>
           )}
         </div>
       </section>
-
-      {/* Driver Cards Grid */}
+      
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
           {paginatedDrivers.map((driver) => {
             const badge = getChampionshipBadge(driver.position);
             return (
-              <div
-                key={driver.permanentNumber}
+              <div 
+                key={driver.permanentNumber} 
                 className={`relative ${getChampionshipBorder(driver.position)} rounded-lg transition-all duration-300 hover:scale-105`}
               >
                 {badge && (
@@ -783,8 +947,7 @@ const Ratings = () => {
             );
           })}
         </div>
-
-        {/* Pagination */}
+        
         {totalPages > 1 && (
           <div className="flex justify-center items-center mt-8 gap-4">
             <Button

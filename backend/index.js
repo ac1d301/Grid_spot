@@ -1,21 +1,4 @@
-require('dotenv').config();
-
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const http = require('http');
-
-const WebSocketServer = require('./websocket');
-const authRoutes = require('./routes/auth');
-const forumRoutes = require('./routes/forum');
-const auth = require('./middlewares/auth');
-const openf1Routes = require('./routes/openf1');
-
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocketServer(server);
-
-// CORS Configuration - THIS IS THE KEY FIX
+// CORS Configuration - Fixed version
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',')
   : ['http://localhost:3000', 'http://localhost:5173'];
@@ -24,8 +7,11 @@ const corsOptions = {
   origin: function (origin, callback) {
     console.log('🌐 CORS check for origin:', origin);
     
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin (Postman, curl, same-origin requests)
+    if (!origin) {
+      console.log('✅ CORS allowed for no origin request');
+      return callback(null, true);
+    }
     
     if (allowedOrigins.includes(origin)) {
       console.log('✅ CORS allowed for:', origin);
@@ -39,14 +25,15 @@ const corsOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+  optionsSuccessStatus: 200
 };
 
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
-// Handle preflight requests explicitly
+// Handle preflight OPTIONS requests
 app.options('*', cors(corsOptions));
+
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));

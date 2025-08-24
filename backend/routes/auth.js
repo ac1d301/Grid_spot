@@ -65,5 +65,13 @@ router.get('/me', auth, async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch user', error: err.message });
   }
 });
+// Add this test endpoint at the end of your auth.js routes file
+router.get('/test', (req, res) => {
+  res.json({ 
+    message: 'Auth API is working!', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
 
 module.exports = router; 

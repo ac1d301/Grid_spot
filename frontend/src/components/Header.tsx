@@ -26,7 +26,7 @@ const Header = () => {
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center space-x-4">
           <Link to="/" className="flex items-center space-x-2">
-            <span className="font-bold text-xl">F1 Fan Portal</span>
+            <span className="font-bold text-xl">GRID SPOT</span>
           </Link>
           <nav className="hidden md:flex space-x-4">
             {navigation.map((item) => (

@@ -163,7 +163,7 @@ const Home = () => {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-xl text-muted-foreground">Loading Formula 1 Hub...</p>
+          <p className="text-xl text-muted-foreground">Loading Formula 1 Grid spot...</p>
         </div>
       </div>
     );
@@ -177,7 +177,7 @@ const Home = () => {
         <div className="container mx-auto px-4 relative z-10">
           <div className="text-center max-w-4xl mx-auto">
             <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-red-400 via-red-500 to-red-600 bg-clip-text text-transparent">
-              FORMULA 1 HUB
+              FORMULA 1 Grid Spot
             </h1>
             <p className="text-xl md:text-2xl mb-8 text-gray-300 leading-relaxed">
               Experience Formula 1 like never before. Live race data, championship standings, 
@@ -194,10 +194,10 @@ const Home = () => {
             )}
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/calendar">
+              <Link to="/forum">
                 <Button size="lg" className="bg-red-600 hover:bg-red-700 text-white px-8 py-3">
                   <Calendar className="mr-2 h-5 w-5" />
-                  View Race Calendar
+                  Join a Discussion
                 </Button>
               </Link>
               <Link to="/ratings">
@@ -265,7 +265,7 @@ const Home = () => {
                   </div>
 
                   <div className="text-center">
-                    <Link to="/calendar">
+                    <Link to="/race-calendar">
                       <Button className="w-full bg-red-600 hover:bg-red-700">
                         View Full Calendar
                         <ArrowRight className="ml-2 h-4 w-4" />

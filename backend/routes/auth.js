@@ -10,10 +10,10 @@ router.post('/register', async (req, res) => {
     console.log('📨 Registration request received:', req.body);
     
     const { username, email, password } = req.body;
-    
+
     // Validate required fields
     if (!username || !email || !password) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'All fields are required',
         received: { username: !!username, email: !!email, password: !!password }
       });
@@ -21,19 +21,19 @@ router.post('/register', async (req, res) => {
 
     // Validate password length
     if (password.length < 6) {
-      return res.status(400).json({ 
-        message: 'Password must be at least 6 characters' 
+      return res.status(400).json({
+        message: 'Password must be at least 6 characters'
       });
     }
 
     // Check if user already exists
-    const existingUser = await User.findOne({ 
-      $or: [{ email }, { username }] 
+    const existingUser = await User.findOne({
+      $or: [{ email }, { username }]
     });
     
     if (existingUser) {
-      return res.status(400).json({ 
-        message: 'User already exists with this email or username' 
+      return res.status(400).json({
+        message: 'User already exists with this email or username'
       });
     }
 
@@ -43,8 +43,8 @@ router.post('/register', async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id, username: user.username }, 
-      process.env.JWT_SECRET, 
+      { userId: user._id, username: user.username },
+      process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -54,21 +54,21 @@ router.post('/register', async (req, res) => {
       success: true,
       message: 'User registered successfully',
       token,
-      user: { 
-        id: user._id, 
-        username: user.username, 
-        email: user.email 
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email
       }
     });
 
   } catch (err) {
     console.error('Registration error:', err);
-    res.status(500).json({ 
-      message: 'Registration failed', 
+    res.status(500).json({
+      message: 'Registration failed',
       error: process.env.NODE_ENV === 'development' ? err.message : 'Server error'
     });
   }
-}); // Fixed: Added missing closing brace
+}); // ✅ Fixed: Added missing closing brace
 
 // Login endpoint
 router.post('/login', async (req, res) => {
@@ -76,34 +76,34 @@ router.post('/login', async (req, res) => {
     console.log('📨 Login request received for:', req.body.email);
     
     const { email, password } = req.body;
-    
+
     // Validate required fields
     if (!email || !password) {
-      return res.status(400).json({ 
-        message: 'Email and password are required' 
+      return res.status(400).json({
+        message: 'Email and password are required'
       });
     }
 
     // Find user by email
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ 
-        message: 'Invalid email or password' 
+      return res.status(401).json({
+        message: 'Invalid email or password'
       });
     }
 
     // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ 
-        message: 'Invalid email or password' 
+      return res.status(401).json({
+        message: 'Invalid email or password'
       });
     }
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user._id, username: user.username }, 
-      process.env.JWT_SECRET, 
+      { userId: user._id, username: user.username },
+      process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -113,21 +113,21 @@ router.post('/login', async (req, res) => {
       success: true,
       message: 'Login successful',
       token,
-      user: { 
-        id: user._id, 
-        username: user.username, 
-        email: user.email 
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email
       }
     });
 
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ 
-      message: 'Login failed', 
+    res.status(500).json({
+      message: 'Login failed',
       error: process.env.NODE_ENV === 'development' ? err.message : 'Server error'
     });
   }
-}); // Fixed: Added missing closing brace
+}); // ✅ Fixed: Added missing closing brace
 
 // Get current user endpoint
 router.get('/me', auth, async (req, res) => {
@@ -138,7 +138,7 @@ router.get('/me', auth, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json({ 
+    res.json({
       success: true,
       user: {
         id: user._id,
@@ -151,12 +151,12 @@ router.get('/me', auth, async (req, res) => {
 
   } catch (err) {
     console.error('Get user error:', err);
-    res.status(500).json({ 
-      message: 'Failed to fetch user', 
+    res.status(500).json({
+      message: 'Failed to fetch user',
       error: process.env.NODE_ENV === 'development' ? err.message : 'Server error'
     });
   }
-}); // Fixed: Added missing closing brace
+}); // ✅ Fixed: Added missing closing brace
 
 // Health check endpoint
 router.get('/test', (req, res) => {

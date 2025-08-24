@@ -1,8 +1,5 @@
 import axios from 'axios';
-import { API_BASE_URL } from '../config/api'; // Add this import
-
-// Remove the hardcoded BASE_URL
-// const BASE_URL = 'http://localhost:5001/api';
+import { API_BASE_URL } from '../config/api';
 
 export interface User {
   id: string;
@@ -33,45 +30,141 @@ class AuthService {
 
   async register(username: string, email: string, password: string): Promise<User> {
     try {
-      const res = await axios.post(`${API_BASE_URL}/auth/register`, { username, email, password });
+      console.log('📤 Sending registration request:', { username, email });
+      
+      const res = await axios.post(
+        `${API_BASE_URL}/auth/register`,
+        { username, email, password },
+        { 
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 10000 // 10 second timeout
+        }
+      );
+      
+      console.log('✅ Registration successful:', res.data);
       this.setToken(res.data.token);
       return res.data.user;
-    } catch (error) {
-      console.error('Registration failed:', error);
-      throw new Error('Failed to register user');
+      
+    } catch (error: any) {
+      console.error('❌ Registration failed:', error);
+      
+      if (error.response) {
+        // Server responded with error status
+        console.error('Error Status:', error.response.status);
+        console.error('Error Data:', error.response.data);
+        console.error('Request Data:', { username, email, password: '***' });
+        
+        const errorMessage = error.response.data?.message || 'Registration failed';
+        throw new Error(errorMessage);
+      } else if (error.request) {
+        // Network error
+        console.error('Network error - no response received:', error.request);
+        throw new Error('Failed to connect to server. Please check your internet connection.');
+      } else {
+        // Other error
+        console.error('Request setup error:', error.message);
+        throw new Error('Failed to send registration request');
+      }
     }
   }
 
   async login(email: string, password: string): Promise<User> {
     try {
-      const res = await axios.post(`${API_BASE_URL}/auth/login`, { email, password });
+      console.log('📤 Sending login request for:', email);
+      
+      const res = await axios.post(
+        `${API_BASE_URL}/auth/login`,
+        { email, password },
+        { 
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 10000 // 10 second timeout
+        }
+      );
+      
+      console.log('✅ Login successful:', res.data);
       this.setToken(res.data.token);
       return res.data.user;
-    } catch (error) {
-      console.error('Login failed:', error);
-      throw new Error('Failed to login user');
+      
+    } catch (error: any) {
+      console.error('❌ Login failed:', error);
+      
+      if (error.response) {
+        console.error('Error Status:', error.response.status);
+        console.error('Error Data:', error.response.data);
+        
+        const errorMessage = error.response.data?.message || 'Login failed';
+        throw new Error(errorMessage);
+      } else if (error.request) {
+        console.error('Network error - no response received:', error.request);
+        throw new Error('Failed to connect to server. Please check your internet connection.');
+      } else {
+        console.error('Request setup error:', error.message);
+        throw new Error('Failed to send login request');
+      }
     }
   }
 
   async getCurrentUser(): Promise<User> {
-    if (!this.token) throw new Error('No token');
+    if (!this.token) {
+      throw new Error('No authentication token found');
+    }
+    
     try {
-      const res = await axios.get(`${API_BASE_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${this.token}` }
-      });
+      const res = await axios.get(
+        `${API_BASE_URL}/auth/me`,
+        { 
+          headers: { 
+            Authorization: `Bearer ${this.token}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000 // 10 second timeout
+        }
+      );
+      
       return res.data.user;
-    } catch (error) {
-      console.error('Failed to get current user:', error);
-      throw new Error('Failed to retrieve current user');
+      
+    } catch (error: any) {
+      console.error('❌ Failed to get current user:', error);
+      
+      if (error.response) {
+        // Check if token is invalid (401/403)
+        if (error.response.status === 401 || error.response.status === 403) {
+          this.clearToken(); // Clear invalid token
+          throw new Error('Session expired. Please login again.');
+        }
+        
+        const errorMessage = error.response.data?.message || 'Failed to retrieve user information';
+        throw new Error(errorMessage);
+      } else if (error.request) {
+        throw new Error('Failed to connect to server. Please check your internet connection.');
+      } else {
+        throw new Error('Failed to retrieve user information');
+      }
     }
   }
 
   logout() {
     this.clearToken();
+    console.log('✅ User logged out successfully');
   }
 
   isAuthenticated(): boolean {
     return !!this.token;
+  }
+
+  // Helper method to refresh token if needed
+  async refreshToken(): Promise<boolean> {
+    if (!this.token) return false;
+    
+    try {
+      // Try to get current user to validate token
+      await this.getCurrentUser();
+      return true;
+    } catch (error) {
+      // Token is invalid, clear it
+      this.clearToken();
+      return false;
+    }
   }
 }
 

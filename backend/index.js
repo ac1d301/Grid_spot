@@ -1,4 +1,26 @@
-// CORS Configuration - Fixed version
+require('dotenv').config();
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const http = require('http');
+
+// IMPORTANT: Declare app before using it
+const app = express();
+
+// Now you can safely use app.use()
+const server = http.createServer(app);
+
+// Rest of your imports
+const WebSocketServer = require('./websocket');
+const authRoutes = require('./routes/auth');
+const forumRoutes = require('./routes/forum');
+const auth = require('./middlewares/auth');
+const openf1Routes = require('./routes/openf1');
+
+const wss = new WebSocketServer(server);
+
+// CORS Configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',')
   : ['http://localhost:3000', 'http://localhost:5173'];
@@ -7,7 +29,7 @@ const corsOptions = {
   origin: function (origin, callback) {
     console.log('🌐 CORS check for origin:', origin);
     
-    // Allow requests with no origin (Postman, curl, same-origin requests)
+    // Allow requests with no origin
     if (!origin) {
       console.log('✅ CORS allowed for no origin request');
       return callback(null, true);
@@ -28,14 +50,9 @@ const corsOptions = {
   optionsSuccessStatus: 200
 };
 
-// Apply CORS middleware
+// Now you can use app.use() safely
 app.use(cors(corsOptions));
-
-// Handle preflight OPTIONS requests
 app.options('*', cors(corsOptions));
-
-
-// Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 

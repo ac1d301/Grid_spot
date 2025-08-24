@@ -12,16 +12,18 @@ const auth = (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Add user from payload
+    // Add user from payload (fixed property consistency)
     req.user = {
       id: decoded.userId,
+      userId: decoded.userId, // Add both for compatibility
       username: decoded.username
     };
     
     next();
   } catch (err) {
+    console.error('Auth middleware error:', err);
     res.status(401).json({ message: 'Token is not valid' });
   }
-};
+}; // Fixed: Added missing closing brace
 
-module.exports = auth; 
+module.exports = auth;

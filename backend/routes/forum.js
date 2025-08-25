@@ -2,7 +2,14 @@ const express = require('express');
 const router = express.Router();
 const { ForumThread, Comment } = require('../models/forum');
 
-// Get all threads with simple sorting
+// Helper function to calculate score with null checks
+const calculateScore = (entity) => {
+  const likesCount = entity.likes ? entity.likes.length : 0;
+  const dislikesCount = entity.dislikes ? entity.dislikes.length : 0;
+  return likesCount - dislikesCount;
+};
+
+// Get all threads with proper like/dislike scoring
 router.get('/threads', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -15,13 +22,18 @@ router.get('/threads', async (req, res) => {
     if (category) query.category = category;
     if (tag) query.tags = tag;
 
-    // Handle "popular" sort with aggregation
+    // Handle "popular" sort with aggregation for better performance
     if (sort === 'popular') {
       const threads = await ForumThread.aggregate([
         { $match: query },
         {
           $addFields: {
-            score: { $subtract: [{ $size: "$upvotes" }, { $size: "$downvotes" }] }
+            score: {
+              $subtract: [
+                { $size: { $ifNull: ["$likes", []] } },
+                { $size: { $ifNull: ["$dislikes", []] } }
+              ]
+            }
           }
         },
         { $sort: { score: -1, createdAt: -1 } },
@@ -37,18 +49,25 @@ router.get('/threads', async (req, res) => {
         },
         { $unwind: '$author' },
         {
+          $addFields: {
+            likes: { $ifNull: ["$likes", []] },
+            dislikes: { $ifNull: ["$dislikes", []] }
+          }
+        },
+        {
           $project: {
             _id: 1,
             title: 1,
             content: 1,
             category: 1,
             tags: 1,
-            upvotes: 1,
-            downvotes: 1,
+            likes: 1,
+            dislikes: 1,
             views: 1,
             commentCount: 1,
             createdAt: 1,
             lastActivity: 1,
+            score: 1,
             'author._id': 1,
             'author.username': 1
           }
@@ -56,7 +75,6 @@ router.get('/threads', async (req, res) => {
       ]);
 
       const total = await ForumThread.countDocuments(query);
-
       return res.json({
         threads,
         currentPage: page,
@@ -69,7 +87,7 @@ router.get('/threads', async (req, res) => {
     let sortOptions = {};
     switch (sort) {
       case 'newest':
-      case 'new':
+      case 'latest':
         sortOptions = { createdAt: -1 };
         break;
       case 'lastActivity':
@@ -86,17 +104,23 @@ router.get('/threads', async (req, res) => {
       .sort(sortOptions)
       .skip((page - 1) * limit)
       .limit(limit)
-      .populate('author', 'username');
+      .populate('author', 'username')
+      .lean();
+
+    // Ensure likes and dislikes arrays exist and add score to each thread
+    threads.forEach(thread => {
+      thread.likes = thread.likes || [];
+      thread.dislikes = thread.dislikes || [];
+      thread.score = calculateScore(thread);
+    });
 
     const total = await ForumThread.countDocuments(query);
-
     res.json({
       threads,
       currentPage: page,
       totalPages: Math.ceil(total / limit),
       totalThreads: total
     });
-
   } catch (error) {
     console.error('Error fetching threads:', error);
     res.status(500).json({ message: 'Error fetching threads' });
@@ -114,12 +138,13 @@ router.post('/threads', async (req, res) => {
       category,
       tags,
       author: req.user.userId,
+      likes: [],
+      dislikes: [],
       lastActivity: new Date()
     });
 
     await thread.save();
     await thread.populate('author', 'username');
-
     res.status(201).json(thread);
   } catch (error) {
     console.error('Error creating thread:', error);
@@ -131,7 +156,6 @@ router.post('/threads', async (req, res) => {
 router.put('/threads/:id', async (req, res) => {
   try {
     const thread = await ForumThread.findById(req.params.id);
-    
     if (!thread) {
       return res.status(404).json({ message: 'Thread not found' });
     }
@@ -141,15 +165,13 @@ router.put('/threads/:id', async (req, res) => {
     }
 
     const { title, content, category, tags } = req.body;
-    
     thread.title = title;
     thread.content = content;
     thread.category = category;
     thread.tags = tags;
-    
+
     await thread.save();
     await thread.populate('author', 'username');
-
     res.json(thread);
   } catch (error) {
     console.error('Error updating thread:', error);
@@ -161,7 +183,6 @@ router.put('/threads/:id', async (req, res) => {
 router.delete('/threads/:id', async (req, res) => {
   try {
     const thread = await ForumThread.findById(req.params.id);
-    
     if (!thread) {
       return res.status(404).json({ message: 'Thread not found' });
     }
@@ -170,7 +191,7 @@ router.delete('/threads/:id', async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to delete this thread' });
     }
 
-    // Delete all comments associated with the thread
+    // Delete all comments in this thread first
     await Comment.deleteMany({ thread: thread._id });
     await ForumThread.findByIdAndDelete(thread._id);
 
@@ -181,7 +202,7 @@ router.delete('/threads/:id', async (req, res) => {
   }
 });
 
-// Get thread with nested comments
+// Get thread with nested comments - Fixed to properly handle replies
 router.get('/threads/:id', async (req, res) => {
   try {
     const thread = await ForumThread.findByIdAndUpdate(
@@ -194,77 +215,137 @@ router.get('/threads/:id', async (req, res) => {
       return res.status(404).json({ message: 'Thread not found' });
     }
 
-    const comments = await Comment.find({ thread: thread._id })
+    // Get all comments for this thread
+    const allComments = await Comment.find({ thread: thread._id })
       .populate('author', 'username')
-      .sort({ createdAt: 1 });
+      .sort({ createdAt: 1 })
+      .lean();
 
-    res.json({ thread, comments });
+    // Organize comments with replies
+    const commentsMap = new Map();
+    const topLevelComments = [];
+
+    // First pass: create map of all comments
+    allComments.forEach(comment => {
+      comment.likes = comment.likes || [];
+      comment.dislikes = comment.dislikes || [];
+      comment.score = calculateScore(comment);
+      comment.replies = [];
+      commentsMap.set(comment._id.toString(), comment);
+    });
+
+    // Second pass: organize into tree structure
+    allComments.forEach(comment => {
+      if (comment.parentComment) {
+        const parent = commentsMap.get(comment.parentComment.toString());
+        if (parent) {
+          parent.replies.push(comment);
+        }
+      } else {
+        topLevelComments.push(comment);
+      }
+    });
+
+    // Ensure thread has likes and dislikes arrays and add score
+    thread.likes = thread.likes || [];
+    thread.dislikes = thread.dislikes || [];
+    thread.score = calculateScore(thread);
+
+    res.json({ thread, comments: topLevelComments });
   } catch (error) {
     console.error('Error fetching thread:', error);
     res.status(500).json({ message: 'Error fetching thread' });
   }
 });
 
-// Enhanced vote endpoint with better scoring
+// Enhanced like/dislike vote endpoint with better error handling
 router.post('/vote', async (req, res) => {
   try {
     const { targetType, targetId, voteType } = req.body;
-    let target;
 
+    // Validate input
+    if (!['thread', 'comment'].includes(targetType)) {
+      return res.status(400).json({ message: 'Invalid target type. Must be "thread" or "comment"' });
+    }
+
+    if (!['like', 'dislike'].includes(voteType)) {
+      return res.status(400).json({ message: 'Invalid vote type. Must be "like" or "dislike"' });
+    }
+
+    // Find target
+    let target;
     if (targetType === 'thread') {
       target = await ForumThread.findById(targetId);
-    } else if (targetType === 'comment') {
-      target = await Comment.findById(targetId);
     } else {
-      return res.status(400).json({ message: 'Invalid target type' });
+      target = await Comment.findById(targetId);
     }
 
     if (!target) {
-      return res.status(404).json({ message: 'Target not found' });
+      return res.status(404).json({ message: `${targetType === 'thread' ? 'Thread' : 'Comment'} not found` });
     }
 
     const userId = req.user.userId;
-    const hasUpvoted = target.upvotes.includes(userId);
-    const hasDownvoted = target.downvotes.includes(userId);
 
-    // Remove existing votes
-    target.upvotes = target.upvotes.filter(id => id.toString() !== userId);
-    target.downvotes = target.downvotes.filter(id => id.toString() !== userId);
+    // Initialize arrays if they don't exist
+    if (!target.likes) target.likes = [];
+    if (!target.dislikes) target.dislikes = [];
 
-    // Add new vote if different from existing
-    if (voteType === 'up' && !hasUpvoted) {
-      target.upvotes.push(userId);
-    } else if (voteType === 'down' && !hasDownvoted) {
-      target.downvotes.push(userId);
+    // Check current vote status
+    const hasLiked = target.likes.some(id => id.toString() === userId);
+    const hasDisliked = target.dislikes.some(id => id.toString() === userId);
+
+    // Create new arrays to avoid mutations
+    let newLikes = target.likes.filter(id => id.toString() !== userId);
+    let newDislikes = target.dislikes.filter(id => id.toString() !== userId);
+
+    // Toggle logic: if user already voted the same way, just remove it (toggle off)
+    // Otherwise, add the new vote
+    let actionTaken = 'removed';
+    if (voteType === 'like' && !hasLiked) {
+      newLikes.push(userId);
+      actionTaken = 'liked';
+    } else if (voteType === 'dislike' && !hasDisliked) {
+      newDislikes.push(userId);
+      actionTaken = 'disliked';
     }
+
+    // Update target with new arrays
+    target.likes = newLikes;
+    target.dislikes = newDislikes;
 
     await target.save();
 
-    const score = target.upvotes.length - target.downvotes.length;
+    const score = calculateScore(target);
+
+    console.log(`Vote processed: ${targetType} ${targetId}, user: ${userId}, action: ${actionTaken}, score: ${score}`);
 
     res.json({
+      success: true,
       targetType,
       targetId,
       score,
-      upvotes: target.upvotes,
-      downvotes: target.downvotes
+      likes: target.likes.length,
+      dislikes: target.dislikes.length,
+      action: actionTaken
     });
   } catch (error) {
-    console.error('Error voting:', error);
+    console.error('Error processing vote:', error);
     res.status(500).json({ message: 'Error processing vote' });
   }
 });
 
-// Enhanced comment creation with better threading
+// Create comment
 router.post('/threads/:id/comments', async (req, res) => {
   try {
     const { content, parentCommentId } = req.body;
-    
+
     const comment = new Comment({
       content,
       author: req.user.userId,
       thread: req.params.id,
-      parentComment: parentCommentId || null
+      parentComment: parentCommentId || null,
+      likes: [],
+      dislikes: []
     });
 
     await comment.save();
@@ -287,7 +368,6 @@ router.post('/threads/:id/comments', async (req, res) => {
 router.put('/comments/:id', async (req, res) => {
   try {
     const comment = await Comment.findById(req.params.id);
-    
     if (!comment) {
       return res.status(404).json({ message: 'Comment not found' });
     }
@@ -298,7 +378,6 @@ router.put('/comments/:id', async (req, res) => {
 
     comment.content = req.body.content;
     comment.isEdited = true;
-    
     await comment.save();
     await comment.populate('author', 'username');
 
@@ -309,11 +388,10 @@ router.put('/comments/:id', async (req, res) => {
   }
 });
 
-// Delete comment
+// Delete comment with proper reply handling
 router.delete('/comments/:id', async (req, res) => {
   try {
     const comment = await Comment.findById(req.params.id);
-    
     if (!comment) {
       return res.status(404).json({ message: 'Comment not found' });
     }
@@ -322,13 +400,17 @@ router.delete('/comments/:id', async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to delete this comment' });
     }
 
-    // Delete all replies to this comment
+    // Count all comments that will be deleted (including replies)
+    const repliesToDelete = await Comment.find({ parentComment: comment._id });
+    const totalCommentsToDelete = 1 + repliesToDelete.length;
+
+    // Delete all replies to this comment first
     await Comment.deleteMany({ parentComment: comment._id });
     await Comment.findByIdAndDelete(comment._id);
 
-    // Decrement comment count
+    // Decrement comment count by the total number of deleted comments
     await ForumThread.findByIdAndUpdate(comment.thread, {
-      $inc: { commentCount: -1 }
+      $inc: { commentCount: -totalCommentsToDelete }
     });
 
     res.json({ message: 'Comment deleted successfully' });

@@ -21,11 +21,12 @@ const commentSchema = new mongoose.Schema({
     ref: 'Comment',
     default: null
   },
-  upvotes: [{
+  // Changed from upvotes/downvotes to likes/dislikes to match frontend
+  likes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
-  downvotes: [{
+  dislikes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
@@ -40,7 +41,7 @@ const commentSchema = new mongoose.Schema({
 });
 
 commentSchema.virtual('score').get(function() {
-  return this.upvotes.length - this.downvotes.length;
+  return this.likes.length - this.dislikes.length;
 });
 
 commentSchema.virtual('replies', {
@@ -74,11 +75,12 @@ const threadSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
-  upvotes: [{
+  // Changed from upvotes/downvotes to likes/dislikes
+  likes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
-  downvotes: [{
+  dislikes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
@@ -105,7 +107,7 @@ const threadSchema = new mongoose.Schema({
 });
 
 threadSchema.virtual('score').get(function() {
-  return this.upvotes.length - this.downvotes.length;
+  return this.likes.length - this.dislikes.length;
 });
 
 threadSchema.virtual('commentCount', {
@@ -115,16 +117,13 @@ threadSchema.virtual('commentCount', {
   count: true
 });
 
-// Update lastActivity when new comments are added
 threadSchema.methods.updateLastActivity = function() {
   this.lastActivity = new Date();
   return this.save();
 };
 
-// Pre-save middleware to handle tags
 threadSchema.pre('save', function(next) {
   if (this.tags) {
-    // Remove duplicates and empty tags
     this.tags = [...new Set(this.tags.filter(tag => tag.trim()))];
   }
   next();
@@ -133,4 +132,4 @@ threadSchema.pre('save', function(next) {
 const Comment = mongoose.model('Comment', commentSchema);
 const ForumThread = mongoose.model('ForumThread', threadSchema);
 
-module.exports = { ForumThread, Comment }; 
+module.exports = { ForumThread, Comment };

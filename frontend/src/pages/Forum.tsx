@@ -29,8 +29,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  ArrowUpIcon,
-  ArrowDownIcon,
+  ThumbsUp,
+  ThumbsDown,
   MessageSquare,
   Eye,
   Clock,
@@ -49,22 +49,22 @@ interface Thread {
   };
   category: string;
   tags: string[];
-  upvotes: string[];
-  downvotes: string[];
+  likes: string[];
+  dislikes: string[];
   views: number;
   commentCount: number;
   createdAt: string;
   lastActivity: string;
+  score?: number;
 }
 
 const Forum = () => {
   const { user, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
-  
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'latest' | 'mostVoted'>('latest');
+  const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -75,8 +75,6 @@ const Forum = () => {
     tags: ''
   });
   const [voteTooltip, setVoteTooltip] = useState<string | null>(null);
-
-  
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -125,35 +123,56 @@ const Forum = () => {
 
   const showVoteTooltip = (msg: string) => {
     setVoteTooltip(msg);
-    setTimeout(() => setVoteTooltip(null), 1500);
+    setTimeout(() => setVoteTooltip(null), 2000);
   };
 
-  const handleVote = async (threadId: string, voteType: 'up' | 'down') => {
-    const threadIndex = threads.findIndex(t => t._id === threadId);
-    if (threadIndex === -1 || !user) return;
-
-    const thread = threads[threadIndex];
-    const hasUpvoted = thread.upvotes.includes(user.id);
-    const hasDownvoted = thread.downvotes.includes(user.id);
-
-    // Prevent double voting in the same direction
-    if ((voteType === 'up' && hasUpvoted) || (voteType === 'down' && hasDownvoted)) {
-      showVoteTooltip('One vote per user');
+  const handleVote = async (threadId: string, voteType: 'like' | 'dislike') => {
+    if (!user) {
+      showVoteTooltip('Please login to vote');
       return;
     }
 
-    // Optimistic update
-    const updatedThreads = [...threads];
-    const updatedThread = { ...thread };
+    const threadIndex = threads.findIndex(t => t._id === threadId);
+    if (threadIndex === -1) return;
 
-    if (voteType === 'up') {
-      updatedThread.upvotes = [...updatedThread.upvotes, user.id];
-      updatedThread.downvotes = updatedThread.downvotes.filter(id => id !== user.id);
+    const thread = threads[threadIndex];
+    const likes = thread.likes || [];
+    const dislikes = thread.dislikes || [];
+    const hasLiked = likes.includes(user.id);
+    const hasDisliked = dislikes.includes(user.id);
+
+    // Optimistic update - create new arrays without mutating originals
+    let newLikes = [...likes];
+    let newDislikes = [...dislikes];
+
+    // Remove user from both arrays first
+    newLikes = newLikes.filter(id => id !== user.id);
+    newDislikes = newDislikes.filter(id => id !== user.id);
+
+    // Check if user is toggling off the same vote
+    const isTogglingOff = (voteType === 'like' && hasLiked) || (voteType === 'dislike' && hasDisliked);
+
+    if (!isTogglingOff) {
+      // Add new vote
+      if (voteType === 'like') {
+        newLikes.push(user.id);
+        showVoteTooltip('Liked!');
+      } else {
+        newDislikes.push(user.id);
+        showVoteTooltip('Disliked!');
+      }
     } else {
-      updatedThread.downvotes = [...updatedThread.downvotes, user.id];
-      updatedThread.upvotes = updatedThread.upvotes.filter(id => id !== user.id);
+      showVoteTooltip('Vote removed');
     }
 
+    // Update the thread with new arrays
+    const updatedThreads = [...threads];
+    const updatedThread = {
+      ...thread,
+      likes: newLikes,
+      dislikes: newDislikes,
+      score: newLikes.length - newDislikes.length
+    };
     updatedThreads[threadIndex] = updatedThread;
     setThreads(updatedThreads);
 
@@ -164,20 +183,23 @@ const Forum = () => {
         voteType
       });
     } catch (err) {
+      // Revert on error
       fetchThreads();
       console.error('Error voting:', err);
+      showVoteTooltip('Failed to vote');
     }
   };
 
   const getVoteScore = (thread: Thread) => {
-    return thread.upvotes.length - thread.downvotes.length;
+    const likes = thread.likes || [];
+    const dislikes = thread.dislikes || [];
+    return thread.score !== undefined ? thread.score : (likes.length - dislikes.length);
   };
 
-  const hasUserVoted = (thread: Thread, voteType: 'up' | 'down') => {
+  const hasUserVoted = (thread: Thread, voteType: 'like' | 'dislike') => {
     if (!user) return false;
-    return voteType === 'up'
-      ? thread.upvotes.includes(user.id)
-      : thread.downvotes.includes(user.id);
+    const targetArray = voteType === 'like' ? (thread.likes || []) : (thread.dislikes || []);
+    return targetArray.includes(user.id);
   };
 
   if (isLoading) return <div>Loading...</div>;
@@ -185,13 +207,12 @@ const Forum = () => {
 
   if (loading && threads.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto p-4">
+      <div className="space-y-4">
         {[1, 2, 3, 4, 5].map((i) => (
-          <Card key={i} className="mb-4">
-            <CardContent className="p-4">
-              <Skeleton className="h-6 w-3/4 mb-2" />
-              <Skeleton className="h-4 w-1/2 mb-4" />
-              <Skeleton className="h-20 w-full" />
+          <Card key={i}>
+            <CardContent className="p-6">
+              <Skeleton className="h-4 w-3/4 mb-2" />
+              <Skeleton className="h-4 w-1/2" />
             </CardContent>
           </Card>
         ))}
@@ -200,24 +221,46 @@ const Forum = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
+    <div className="max-w-6xl mx-auto p-6 space-y-6 bg-gray-950/30 rounded-xl shadow-lg">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Pit Lane Chat</h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            The Ultimate Forum for F1 Fans to Discuss, Debate, and Share Their Passion for Racing
-          </p>
+      <div className="text-center space-y-2">
+        <h1 className="text-4xl font-bold text-white" style={{ fontFamily: '"Orbitron", "Montserrat", "Arial Black", sans-serif' }}>
+          Pit Lane Chat
+        </h1>
+        <p className="text-lg text-white">
+          The Ultimate Forum for F1 Fans to Discuss, Debate, and Share Their Passion for Racing
+        </p>
+      </div>
+
+      {/* Sort & Create Thread Section */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center space-x-2">
+          <span className="text-sm font-medium text-white">Sort by:</span>
+          <Button
+            variant={sortBy === 'latest' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSortBy('latest')}
+          >
+            <Clock className="w-4 h-4 mr-1" />
+            Latest
+          </Button>
+          <Button
+            variant={sortBy === 'popular' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSortBy('popular')}
+          >
+            <TrendingUp className="w-4 h-4 mr-1" />
+            Most Liked
+          </Button>
         </div>
-        
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="bg-red-600 hover:bg-red-700">
               <Plus className="w-4 h-4 mr-2" />
               Create Thread
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>Create New Thread</DialogTitle>
               <DialogDescription>
@@ -226,16 +269,15 @@ const Forum = () => {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium mb-2 block">Title</label>
+                <label className="text-sm font-medium">Title</label>
                 <Input
-                  placeholder="Thread title..."
                   value={newThread.title}
                   onChange={(e) => setNewThread({ ...newThread, title: e.target.value })}
+                  placeholder="Enter thread title..."
                 />
               </div>
-              
               <div>
-                <label className="text-sm font-medium mb-2 block">Category</label>
+                <label className="text-sm font-medium">Category</label>
                 <Select
                   value={newThread.category}
                   onValueChange={(value) => setNewThread({ ...newThread, category: value })}
@@ -251,143 +293,127 @@ const Forum = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
               <div>
-                <label className="text-sm font-medium mb-2 block">Content</label>
+                <label className="text-sm font-medium">Content</label>
                 <Textarea
-                  placeholder="What's on your mind?"
                   value={newThread.content}
                   onChange={(e) => setNewThread({ ...newThread, content: e.target.value })}
+                  placeholder="Share your thoughts..."
                   className="min-h-[120px]"
                 />
               </div>
-              
               <div>
-                <label className="text-sm font-medium mb-2 block">Tags (optional)</label>
+                <label className="text-sm font-medium">Tags (optional)</label>
                 <Input
-                  placeholder="ferrari, verstappen, racing (comma separated)"
                   value={newThread.tags}
                   onChange={(e) => setNewThread({ ...newThread, tags: e.target.value })}
+                  placeholder="Separate tags with commas"
                 />
               </div>
-              
-              <div className="flex gap-2 justify-end">
+              <div className="flex justify-end space-x-2">
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleCreateThread}>
-                  Create Thread
-                </Button>
+                <Button onClick={handleCreateThread}>Create Thread</Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Sort Filter */}
-      <Card className="mb-6">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-medium">Sort by:</span>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={sortBy === 'latest' ? 'default' : 'ghost'}
-                onClick={() => setSortBy('latest')}
-              >
-                <Clock className="w-4 h-4 mr-2" />
-                Latest
-              </Button>
-              <Button
-                size="sm"
-                variant={sortBy === 'mostVoted' ? 'default' : 'ghost'}
-                onClick={() => setSortBy('mostVoted')}
-              >
-                <TrendingUp className="w-4 h-4 mr-2" />
-                Most Voted
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Threads List */}
       <div className="space-y-4">
         {threads.map((thread) => {
           const score = getVoteScore(thread);
-          const hasUpvoted = hasUserVoted(thread, 'up');
-          const hasDownvoted = hasUserVoted(thread, 'down');
+          const hasLiked = hasUserVoted(thread, 'like');
+          const hasDisliked = hasUserVoted(thread, 'dislike');
 
           return (
-            <Card key={thread._id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-0">
-                <div className="flex">
-                  {/* Vote Section */}
-                  <div className="flex flex-col items-center p-4 bg-red-900/30 dark:bg-gray-800 min-w-[80px]">
+            <Card key={thread._id} className="hover:shadow-md transition-shadow bg-red-900/10 border-red-800/30">
+              <CardContent className="p-6">
+                <div className="flex space-x-4">
+                  {/* Vote Section - Fixed alignment */}
+                  <div className="flex flex-col items-center space-y-1 min-w-[60px]">
                     <Button
-                      size="sm"
                       variant="ghost"
-                      className={`p-2 ${hasUpvoted ? 'text-orange-500' : ''}`}
-                      onClick={() => handleVote(thread._id, 'up')}
+                      size="sm"
+                      onClick={() => handleVote(thread._id, 'like')}
+                      className={`p-2 rounded-full transition-colors ${
+                        hasLiked
+                          ? 'bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900 dark:text-green-400'
+                          : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
                     >
-                      <ArrowUpIcon className="w-5 h-5" />
+                      <ThumbsUp className="w-4 h-4" />
                     </Button>
-                    <span className={`font-bold text-sm ${
-                      score > 0 ? 'text-orange-500' : score < 0 ? 'text-blue-500' : ''
+                    <span className={`text-sm font-medium ${
+                      score > 0 ? 'text-green-600' : score < 0 ? 'text-red-600' : 'text-white'
                     }`}>
                       {score}
                     </span>
                     <Button
-                      size="sm"
                       variant="ghost"
-                      className={`p-2 ${hasDownvoted ? 'text-blue-500' : ''}`}
-                      onClick={() => handleVote(thread._id, 'down')}
+                      size="sm"
+                      onClick={() => handleVote(thread._id, 'dislike')}
+                      className={`p-2 rounded-full transition-colors ${
+                        hasDisliked
+                          ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900 dark:text-red-400'
+                          : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
                     >
-                      <ArrowDownIcon className="w-5 h-5" />
+                      <ThumbsDown className="w-4 h-4" />
                     </Button>
                   </div>
 
                   {/* Thread Content */}
-                  <div 
-                    className="flex-1 p-4 cursor-pointer"
-                    onClick={() => navigate(`/forum/thread/${thread._id}`)}
-                  >
-                    <div className="flex items-center gap-2 mb-2 text-sm text-gray-500">
-                      <Badge variant="outline">{thread.category}</Badge>
-                      <span>•</span>
-                      <span>by {thread.author.username}</span>
-                      <span>•</span>
-                      <span>{formatDistanceToNow(new Date(thread.createdAt), { addSuffix: true })}</span>
+                  <div className="flex-1 space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="secondary">{thread.category}</Badge>
+                      <span className="text-sm text-gray-300">
+                        by {thread.author.username}
+                      </span>
+                      <span className="text-sm text-gray-400">•</span>
+                      <span className="text-sm text-gray-300">
+                        {formatDistanceToNow(new Date(thread.createdAt), { addSuffix: true })}
+                      </span>
                     </div>
 
-                    <h3 className="font-semibold text-lg mb-2 hover:text-blue-600 dark:hover:text-blue-400">
-                      {thread.title}
-                    </h3>
-
-                    {thread.content && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
-                        {thread.content.length > 150 
-                          ? `${thread.content.substring(0, 150)}...` 
-                          : thread.content
-                        }
-                      </p>
-                    )}
+                    <div
+                      className="cursor-pointer"
+                      onClick={() => navigate(`/forum/thread/${thread._id}`)}
+                    >
+                      {/* Thread title and content in white */}
+                      <h3 className="text-xl font-semibold text-white hover:text-red-600 dark:hover:text-red-400 transition-colors" style={{ fontFamily: '"Orbitron", "Montserrat", "Arial Black", sans-serif' }}>
+                        {thread.title}
+                      </h3>
+                      {thread.content && (
+                        <p className="text-white mt-2">
+                          {thread.content.length > 150
+                            ? `${thread.content.substring(0, 150)}...`
+                            : thread.content}
+                        </p>
+                      )}
+                    </div>
 
                     {thread.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-3">
+                      <div className="flex flex-wrap gap-1">
                         {thread.tags.slice(0, 3).map((tag) => (
-                          <Badge key={tag} variant="secondary" className="text-xs">
+                          <Badge key={tag} variant="outline" className="text-xs">
                             {tag}
                           </Badge>
                         ))}
                       </div>
                     )}
 
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <div className="flex items-center gap-1">
+                    <div className="flex items-center space-x-4 text-sm text-gray-400">
+                      <div className="flex items-center space-x-1">
                         <MessageSquare className="w-4 h-4" />
-                        <span>{thread.commentCount} comments</span>
+                        <span>{thread.commentCount} Comment down your thoughts</span>
                       </div>
+                      {/* <div className="flex items-center space-x-1">
+                        <Eye className="w-4 h-4" />
+                        <span>{thread.views} views</span>
+                      </div> */}
                     </div>
                   </div>
                 </div>
@@ -397,13 +423,16 @@ const Forum = () => {
         })}
       </div>
 
+      {/* Vote Tooltip */}
       {voteTooltip && (
-        <div className="text-xs text-red-500 mb-2">{voteTooltip}</div>
+        <div className="fixed bottom-4 right-4 bg-black text-white px-3 py-2 rounded-md text-sm z-50">
+          {voteTooltip}
+        </div>
       )}
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-8">
+        <div className="flex justify-center items-center space-x-2">
           <Button
             variant="outline"
             onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -424,18 +453,17 @@ const Forum = () => {
         </div>
       )}
 
+      {/* Empty State */}
       {threads.length === 0 && !loading && (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <h3 className="text-lg font-medium mb-2">No threads found</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Be the first to start a discussion!
-            </p>
-            <Button onClick={() => setIsCreateDialogOpen(true)}>
-              Create First Thread
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="text-center py-12">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            No threads found
+          </h3>
+          <p className="text-gray-500 mb-4">Be the first to start a discussion!</p>
+          <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-red-600 hover:bg-red-700">
+            Create First Thread
+          </Button>
+        </div>
       )}
     </div>
   );

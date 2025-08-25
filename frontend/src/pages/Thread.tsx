@@ -13,8 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  ArrowUpIcon,
-  ArrowDownIcon,
+  ThumbsUp,
+  ThumbsDown,
   MessageSquare,
   Eye,
   ArrowLeft,
@@ -34,11 +34,12 @@ interface Thread {
   };
   category: string;
   tags: string[];
-  upvotes: string[];
-  downvotes: string[];
+  likes: string[];
+  dislikes: string[];
   views: number;
   commentCount: number;
   createdAt: string;
+  score?: number;
 }
 
 interface Comment {
@@ -50,18 +51,18 @@ interface Comment {
   };
   thread: string;
   parentComment?: string;
-  upvotes: string[];
-  downvotes: string[];
+  likes: string[];
+  dislikes: string[];
   createdAt: string;
   isEdited: boolean;
   replies?: Comment[];
+  score?: number;
 }
 
 const Thread = () => {
   const { id } = useParams<{ id: string }>();
   const { user, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
-  
   const [thread, setThread] = useState<Thread | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,10 +73,9 @@ const Thread = () => {
   const [editContent, setEditContent] = useState('');
   const [voteTooltip, setVoteTooltip] = useState<string | null>(null);
 
-  // Handler to show tooltip for a short time
   const showVoteTooltip = (msg: string) => {
     setVoteTooltip(msg);
-    setTimeout(() => setVoteTooltip(null), 1500);
+    setTimeout(() => setVoteTooltip(null), 2000);
   };
 
   useEffect(() => {
@@ -86,7 +86,6 @@ const Thread = () => {
 
   useEffect(() => {
     if (!isAuthenticated || !id) return;
-    
     setLoading(true);
     forumService.getThread(id)
       .then((data) => {
@@ -110,6 +109,13 @@ const Thread = () => {
       // Refresh comments
       const data = await forumService.getThread(id);
       setComments(data.comments);
+      // Update thread comment count
+      if (thread) {
+        setThread({
+          ...thread,
+          commentCount: thread.commentCount + 1
+        });
+      }
     } catch (err) {
       console.error('Error posting comment:', err);
     }
@@ -122,7 +128,7 @@ const Thread = () => {
       await forumService.updateComment(commentId, editContent);
       setEditingComment(null);
       setEditContent('');
-      const data = await forumService.getThread(id);
+      const data = await forumService.getThread(id!);
       setComments(data.comments);
     } catch (err) {
       console.error('Error editing comment:', err);
@@ -130,58 +136,66 @@ const Thread = () => {
   };
 
   const handleDeleteComment = async (commentId: string) => {
+    if (!confirm('Are you sure you want to delete this comment?')) return;
+
     try {
       await forumService.deleteComment(commentId);
-      const data = await forumService.getThread(id);
+      const data = await forumService.getThread(id!);
       setComments(data.comments);
+      // Update thread comment count
+      if (thread) {
+        setThread({
+          ...thread,
+          commentCount: Math.max(0, thread.commentCount - 1)
+        });
+      }
     } catch (err) {
       console.error('Error deleting comment:', err);
     }
   };
 
-  const handleVote = async (targetType: 'thread' | 'comment', targetId: string, voteType: 'up' | 'down') => {
-    try {
-      await forumService.vote({
-        targetType,
-        targetId,
-        voteType
-      });
-      
-      if (targetType === 'thread' && thread) {
-        const updatedThread = await forumService.getThread(id!);
-        setThread(updatedThread.thread);
-      } else {
-        const data = await forumService.getThread(id!);
-        setComments(data.comments);
-      }
-    } catch (err) {
-      console.error('Error voting:', err);
-    }
-  };
-
-  const handleThreadVote = async (voteType: 'up' | 'down') => {
-    if (!thread || !user) return;
-
-    const hasUpvoted = thread.upvotes.includes(user.id);
-    const hasDownvoted = thread.downvotes.includes(user.id);
-
-    // Prevent double voting in the same direction
-    if ((voteType === 'up' && hasUpvoted) || (voteType === 'down' && hasDownvoted)) {
-      showVoteTooltip('One vote per user');
+  const handleThreadVote = async (voteType: 'like' | 'dislike') => {
+    if (!thread || !user) {
+      showVoteTooltip('Please login to vote');
       return;
     }
 
-    // Optimistic update
-    const updatedThread = { ...thread };
+    const likes = thread.likes || [];
+    const dislikes = thread.dislikes || [];
+    const hasLiked = likes.includes(user.id);
+    const hasDisliked = dislikes.includes(user.id);
 
-    if (voteType === 'up') {
-      updatedThread.upvotes = [...updatedThread.upvotes, user.id];
-      updatedThread.downvotes = updatedThread.downvotes.filter(id => id !== user.id);
+    // Create new arrays without mutating originals
+    let newLikes = [...likes];
+    let newDislikes = [...dislikes];
+
+    // Remove user from both arrays first
+    newLikes = newLikes.filter(id => id !== user.id);
+    newDislikes = newDislikes.filter(id => id !== user.id);
+
+    // Check if user is toggling off the same vote
+    const isTogglingOff = (voteType === 'like' && hasLiked) || (voteType === 'dislike' && hasDisliked);
+
+    if (!isTogglingOff) {
+      // Add new vote
+      if (voteType === 'like') {
+        newLikes.push(user.id);
+        showVoteTooltip('Liked!');
+      } else {
+        newDislikes.push(user.id);
+        showVoteTooltip('Disliked!');
+      }
     } else {
-      updatedThread.downvotes = [...updatedThread.downvotes, user.id];
-      updatedThread.upvotes = updatedThread.upvotes.filter(id => id !== user.id);
+      showVoteTooltip('Vote removed');
     }
 
+    // Optimistic update
+    const updatedThread = {
+      ...thread,
+      likes: newLikes,
+      dislikes: newDislikes,
+      score: newLikes.length - newDislikes.length
+    };
     setThread(updatedThread);
 
     try {
@@ -195,78 +209,162 @@ const Thread = () => {
       const refreshed = await forumService.getThread(thread._id);
       setThread(refreshed.thread);
       console.error('Error voting:', err);
+      showVoteTooltip('Failed to vote');
+    }
+  };
+
+  const handleCommentVote = async (commentId: string, voteType: 'like' | 'dislike') => {
+    if (!user) {
+      showVoteTooltip('Please login to vote');
+      return;
+    }
+
+    const commentIndex = comments.findIndex(c => c._id === commentId);
+    if (commentIndex === -1) return;
+
+    const comment = comments[commentIndex];
+    const likes = comment.likes || [];
+    const dislikes = comment.dislikes || [];
+    const hasLiked = likes.includes(user.id);
+    const hasDisliked = dislikes.includes(user.id);
+
+    // Create new arrays without mutating originals
+    let newLikes = [...likes];
+    let newDislikes = [...dislikes];
+
+    // Remove user from both arrays first
+    newLikes = newLikes.filter(id => id !== user.id);
+    newDislikes = newDislikes.filter(id => id !== user.id);
+
+    // Check if user is toggling off the same vote
+    const isTogglingOff = (voteType === 'like' && hasLiked) || (voteType === 'dislike' && hasDisliked);
+
+    if (!isTogglingOff) {
+      // Add new vote
+      if (voteType === 'like') {
+        newLikes.push(user.id);
+        showVoteTooltip('Liked!');
+      } else {
+        newDislikes.push(user.id);
+        showVoteTooltip('Disliked!');
+      }
+    } else {
+      showVoteTooltip('Vote removed');
+    }
+
+    // Optimistic update
+    const updatedComments = [...comments];
+    const updatedComment = {
+      ...comment,
+      likes: newLikes,
+      dislikes: newDislikes,
+      score: newLikes.length - newDislikes.length
+    };
+    updatedComments[commentIndex] = updatedComment;
+    setComments(updatedComments);
+
+    try {
+      await forumService.vote({
+        targetType: 'comment',
+        targetId: commentId,
+        voteType
+      });
+    } catch (err) {
+      // Revert on error
+      const data = await forumService.getThread(id!);
+      setComments(data.comments);
+      console.error('Error voting:', err);
+      showVoteTooltip('Failed to vote');
     }
   };
 
   const getVoteScore = (target: Thread | Comment) => {
-    return target.upvotes.length - target.downvotes.length;
+    const likes = target.likes || [];
+    const dislikes = target.dislikes || [];
+    return target.score !== undefined ? target.score : (likes.length - dislikes.length);
   };
 
-  const hasUserVoted = (target: Thread | Comment, voteType: 'up' | 'down') => {
+  const hasUserVoted = (target: Thread | Comment, voteType: 'like' | 'dislike') => {
     if (!user) return false;
-    return voteType === 'up' 
-      ? target.upvotes.includes(user.id)
-      : target.downvotes.includes(user.id);
+    const targetArray = voteType === 'like' ? (target.likes || []) : (target.dislikes || []);
+    return targetArray.includes(user.id);
   };
 
   const renderComment = (comment: Comment, depth = 0) => {
     const score = getVoteScore(comment);
-    const hasUpvoted = hasUserVoted(comment, 'up');
-    const hasDownvoted = hasUserVoted(comment, 'down');
+    const hasLiked = hasUserVoted(comment, 'like');
+    const hasDisliked = hasUserVoted(comment, 'dislike');
 
     return (
-      <div key={comment._id} className={`${depth > 0 ? 'ml-8 border-l-2 border-gray-200 dark:border-gray-700 pl-4' : ''}`}>
-        <Card className="mb-4">
+      <div key={comment._id} className={`mb-4 ${depth > 0 ? 'ml-8 border-l-2 border-gray-200 dark:border-gray-700 pl-4' : ''}`}>
+        <Card>
           <CardContent className="p-4">
-            <div className="flex gap-4">
-              {/* Vote Section */}
-              <div className="flex flex-col items-center gap-1">
+            <div className="flex space-x-3">
+              {/* Vote Section - Fixed alignment */}
+              <div className="flex flex-col items-center space-y-1 min-w-[50px]">
                 <Button
-                  size="sm"
                   variant="ghost"
-                  className={`p-1 ${hasUpvoted ? 'text-orange-500' : ''}`}
-                  onClick={() => handleVote('comment', comment._id, 'up')}
+                  size="sm"
+                  onClick={() => handleCommentVote(comment._id, 'like')}
+                  className={`p-1 rounded-full transition-colors ${
+                    hasLiked
+                      ? 'bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900 dark:text-green-400'
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
                 >
-                  <ArrowUpIcon className="w-4 h-4" />
+                  <ThumbsUp className="w-3 h-3" />
                 </Button>
                 <span className={`text-sm font-medium ${
-                  score > 0 ? 'text-orange-500' : score < 0 ? 'text-blue-500' : ''
+                  score > 0 ? 'text-green-600' : score < 0 ? 'text-red-600' : ''
                 }`}>
                   {score}
                 </span>
                 <Button
-                  size="sm"
                   variant="ghost"
-                  className={`p-1 ${hasDownvoted ? 'text-blue-500' : ''}`}
-                  onClick={() => handleVote('comment', comment._id, 'down')}
+                  size="sm"
+                  onClick={() => handleCommentVote(comment._id, 'dislike')}
+                  className={`p-1 rounded-full transition-colors ${
+                    hasDisliked
+                      ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900 dark:text-red-400'
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
                 >
-                  <ArrowDownIcon className="w-4 h-4" />
+                  <ThumbsDown className="w-3 h-3" />
                 </Button>
               </div>
 
               {/* Comment Content */}
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2 text-sm text-gray-500">
-                  <span className="font-medium">{comment.author.username}</span>
-                  <span>•</span>
-                  <span>{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</span>
-                  {comment.isEdited && <Badge variant="outline" className="text-xs">edited</Badge>}
+              <div className="flex-1 space-y-3">
+                <div className="flex items-center space-x-2">
+                  <span className="font-medium text-red-600/50">
+                    {comment.author.username}
+                  </span>
+                  <span className="text-sm text-gray-500">•</span>
+                  <span className="text-sm text-gray-500">
+                    {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                  </span>
+                  {comment.isEdited && (
+                    <>
+                      <span className="text-sm text-gray-200">•</span>
+                      <span className="text-xs text-gray-300">edited</span>
+                    </>
+                  )}
                 </div>
 
                 {editingComment === comment._id ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Textarea
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
                       className="min-h-[80px]"
                     />
-                    <div className="flex gap-2">
+                    <div className="flex space-x-2">
                       <Button size="sm" onClick={() => handleEditSubmit(comment._id)}>
                         Save
                       </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => {
                           setEditingComment(null);
                           setEditContent('');
@@ -278,15 +376,14 @@ const Thread = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="mb-3">
-                      <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
-                    </div>
+                    <p className="text-gray-300 whitespace-pre-wrap">
+                      {comment.content}
+                    </p>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center space-x-3">
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-xs h-6"
                         onClick={() => setReplyTo(comment._id)}
                       >
                         <Reply className="w-3 h-3 mr-1" />
@@ -298,7 +395,6 @@ const Thread = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="text-xs h-6"
                             onClick={() => {
                               setEditingComment(comment._id);
                               setEditContent(comment.content);
@@ -310,8 +406,8 @@ const Thread = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="text-xs h-6"
                             onClick={() => handleDeleteComment(comment._id)}
+                            className="text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="w-3 h-3 mr-1" />
                             Delete
@@ -321,20 +417,17 @@ const Thread = () => {
                     </div>
 
                     {replyTo === comment._id && (
-                      <div className="mt-3 space-y-2">
+                      <div className="space-y-3 mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                         <Textarea
-                          placeholder="Write a reply..."
                           value={newComment}
                           onChange={(e) => setNewComment(e.target.value)}
+                          placeholder="Write a reply..."
                           className="min-h-[80px]"
                         />
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={handleSubmitComment}>
-                            Reply
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
+                        <div className="flex space-x-2">
+                          <Button onClick={handleSubmitComment}>Reply</Button>
+                          <Button
+                            variant="outline"
                             onClick={() => {
                               setReplyTo(null);
                               setNewComment('');
@@ -354,7 +447,7 @@ const Thread = () => {
 
         {/* Render Replies */}
         {comment.replies && comment.replies.length > 0 && (
-          <div className="space-y-2">
+          <div className="mt-3">
             {comment.replies.map(reply => renderComment(reply, depth + 1))}
           </div>
         )}
@@ -367,18 +460,13 @@ const Thread = () => {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto p-4">
-        <Skeleton className="h-8 w-32 mb-4" />
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <Skeleton className="h-6 w-3/4 mb-4" />
-            <Skeleton className="h-20 w-full" />
-          </CardContent>
-        </Card>
+      <div className="max-w-4xl mx-auto p-6 space-y-6">
         {[1, 2, 3].map((i) => (
-          <Card key={i} className="mb-4">
-            <CardContent className="p-4">
-              <Skeleton className="h-16 w-full" />
+          <Card key={i}>
+            <CardContent className="p-6">
+              <Skeleton className="h-4 w-3/4 mb-2" />
+              <Skeleton className="h-4 w-1/2 mb-4" />
+              <Skeleton className="h-20 w-full" />
             </CardContent>
           </Card>
         ))}
@@ -388,10 +476,10 @@ const Thread = () => {
 
   if (error || !thread) {
     return (
-      <div className="max-w-4xl mx-auto p-4">
+      <div className="max-w-4xl mx-auto p-6">
         <Card>
-          <CardContent className="p-4 text-center">
-            {error || 'Thread not found'}
+          <CardContent className="p-6 text-center">
+            <p className="text-red-600">{error || 'Thread not found'}</p>
           </CardContent>
         </Card>
       </div>
@@ -399,14 +487,14 @@ const Thread = () => {
   }
 
   const threadScore = getVoteScore(thread);
-  const hasUpvoted = hasUserVoted(thread, 'up');
-  const hasDownvoted = hasUserVoted(thread, 'down');
+  const hasLiked = hasUserVoted(thread, 'like');
+  const hasDisliked = hasUserVoted(thread, 'dislike');
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
+    <div className="max-w-4xl mx-auto p-6 space-y-6 bg-gray-950/30 rounded-xl shadow-lg">
       {/* Back Button */}
-      <Button 
-        variant="ghost" 
+      <Button
+        variant="outline"
         onClick={() => navigate('/forum')}
         className="mb-4"
       >
@@ -415,65 +503,80 @@ const Thread = () => {
       </Button>
 
       {/* Thread */}
-      <Card className="mb-6">
-        <CardContent className="p-0">
-          <div className="flex">
-            {/* Vote Section */}
-            <div className="flex flex-col items-center p-4 bg-red-900/30 dark:bg-gray-800 min-w-[80px]">
+      <Card className='bg-red-950/40 border-red-800/30'>
+        <CardContent className="p-6">
+          <div className="flex space-x-4">
+            {/* Vote Section - Fixed alignment */}
+            <div className="flex flex-col items-center space-y-2 min-w-[60px]">
               <Button
-                size="sm"
                 variant="ghost"
-                className={`p-2 ${hasUpvoted ? 'text-orange-500' : ''}`}
-                onClick={() => handleThreadVote('up')}
+                size="sm"
+                onClick={() => handleThreadVote('like')}
+                className={`p-2 rounded-full transition-colors ${
+                  hasLiked
+                    ? 'bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900 dark:text-green-400'
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
               >
-                <ArrowUpIcon className="w-5 h-5" />
+                <ThumbsUp className="w-4 h-4" />
               </Button>
-              <span className={`font-bold ${
-                threadScore > 0 ? 'text-orange-500' : threadScore < 0 ? 'text-blue-500' : ''
+              <span className={`text-lg font-bold ${
+                threadScore > 0 ? 'text-green-600' : threadScore < 0 ? 'text-red-600' : ''
               }`}>
                 {threadScore}
               </span>
               <Button
-                size="sm"
                 variant="ghost"
-                className={`p-2 ${hasDownvoted ? 'text-blue-500' : ''}`}
-                onClick={() => handleThreadVote('down')}
+                size="sm"
+                onClick={() => handleThreadVote('dislike')}
+                className={`p-2 rounded-full transition-colors ${
+                  hasDisliked
+                    ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900 dark:text-red-400'
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
               >
-                <ArrowDownIcon className="w-5 h-5" />
+                <ThumbsDown className="w-4 h-4" />
               </Button>
             </div>
 
             {/* Thread Content */}
-            <div className="flex-1 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Badge variant="outline">{thread.category}</Badge>
+            <div className="flex-1 space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{thread.category}</Badge>
                 {thread.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary">
+                  <Badge key={tag} variant="outline" className="text-xs">
                     {tag}
                   </Badge>
                 ))}
               </div>
 
-              <h1 className="text-2xl font-bold mb-3">{thread.title}</h1>
+              {/* Fixed thread title color */}
+               <h1 className="text-2xl font-bold text-white" style={{ fontFamily: '"Orbitron", "Montserrat", "Arial Black", sans-serif' }}>
+                {thread.title}
+              </h1>
 
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
+              <div className="flex items-center space-x-2 text-sm text-gray-300">
                 <span>by {thread.author.username}</span>
                 <span>•</span>
-                <span>{formatDistanceToNow(new Date(thread.createdAt), { addSuffix: true })}</span>
+                <span>
+                  {formatDistanceToNow(new Date(thread.createdAt), { addSuffix: true })}
+                </span>
                 {/* <span>•</span> */}
-                {/* <div className="flex items-center gap-1">
+                {/* <div className="flex items-center space-x-1">
                   <Eye className="w-4 h-4" />
                   <span>{thread.views} views</span>
-                </div>
-                <span>•</span> */}
-                {/* <div className="flex items-center gap-1">
+                </div> */}
+                {/* <span>•</span>
+                <div className="flex items-center space-x-1">
                   <MessageSquare className="w-4 h-4" />
                   <span>{thread.commentCount} comments</span>
                 </div> */}
               </div>
 
-              <div className="prose dark:prose-invert max-w-none">
-                <p className="whitespace-pre-wrap">{thread.content}</p>
+              <div className="prose max-w-none">
+                <p className="text-white whitespace-pre-wrap">
+                  {thread.content}
+                </p>
               </div>
             </div>
           </div>
@@ -481,14 +584,17 @@ const Thread = () => {
       </Card>
 
       {/* Comment Form */}
-      <Card className="mb-6">
-        <CardContent className="p-4">
-          <div className="space-y-3">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Add a comment</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
             <Textarea
-              placeholder="What are your thoughts?"
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
-              className="min-h-[100px]"
+              placeholder="Share your thoughts..."
+              className="min-h-[100px] mb-3"
             />
             <Button onClick={handleSubmitComment} disabled={!newComment.trim()}>
               Post Comment
@@ -499,7 +605,9 @@ const Thread = () => {
 
       {/* Vote Tooltip */}
       {voteTooltip && (
-        <div className="text-xs text-red-500 mb-2">{voteTooltip}</div>
+        <div className="fixed bottom-4 right-4 bg-black text-white px-3 py-2 rounded-md text-sm z-50">
+          {voteTooltip}
+        </div>
       )}
 
       {/* Comments */}
@@ -508,8 +616,8 @@ const Thread = () => {
         
         {comments.length === 0 && (
           <Card>
-            <CardContent className="p-8 text-center text-gray-500">
-              No comments yet. Be the first to share your thoughts!
+            <CardContent className="p-8 text-center">
+              <p className="text-white">No comments yet. Be the first to share your thoughts!</p>
             </CardContent>
           </Card>
         )}

@@ -74,6 +74,9 @@ const Forum = () => {
     category: 'General',
     tags: ''
   });
+  const [voteTooltip, setVoteTooltip] = useState<string | null>(null);
+
+  
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -120,15 +123,48 @@ const Forum = () => {
     }
   };
 
+  const showVoteTooltip = (msg: string) => {
+    setVoteTooltip(msg);
+    setTimeout(() => setVoteTooltip(null), 1500);
+  };
+
   const handleVote = async (threadId: string, voteType: 'up' | 'down') => {
+    const threadIndex = threads.findIndex(t => t._id === threadId);
+    if (threadIndex === -1 || !user) return;
+
+    const thread = threads[threadIndex];
+    const hasUpvoted = thread.upvotes.includes(user.id);
+    const hasDownvoted = thread.downvotes.includes(user.id);
+
+    // Prevent double voting in the same direction
+    if ((voteType === 'up' && hasUpvoted) || (voteType === 'down' && hasDownvoted)) {
+      showVoteTooltip('One vote per user');
+      return;
+    }
+
+    // Optimistic update
+    const updatedThreads = [...threads];
+    const updatedThread = { ...thread };
+
+    if (voteType === 'up') {
+      updatedThread.upvotes = [...updatedThread.upvotes, user.id];
+      updatedThread.downvotes = updatedThread.downvotes.filter(id => id !== user.id);
+    } else {
+      updatedThread.downvotes = [...updatedThread.downvotes, user.id];
+      updatedThread.upvotes = updatedThread.upvotes.filter(id => id !== user.id);
+    }
+
+    updatedThreads[threadIndex] = updatedThread;
+    setThreads(updatedThreads);
+
     try {
       await forumService.vote({
         targetType: 'thread',
         targetId: threadId,
         voteType
       });
-      fetchThreads();
     } catch (err) {
+      fetchThreads();
       console.error('Error voting:', err);
     }
   };
@@ -352,10 +388,6 @@ const Forum = () => {
                         <MessageSquare className="w-4 h-4" />
                         <span>{thread.commentCount} comments</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Eye className="w-4 h-4" />
-                        <span>{thread.views} views</span>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -364,6 +396,10 @@ const Forum = () => {
           );
         })}
       </div>
+
+      {voteTooltip && (
+        <div className="text-xs text-red-500 mb-2">{voteTooltip}</div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (

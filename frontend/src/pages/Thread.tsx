@@ -70,6 +70,13 @@ const Thread = () => {
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
+  const [voteTooltip, setVoteTooltip] = useState<string | null>(null);
+
+  // Handler to show tooltip for a short time
+  const showVoteTooltip = (msg: string) => {
+    setVoteTooltip(msg);
+    setTimeout(() => setVoteTooltip(null), 1500);
+  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -148,6 +155,45 @@ const Thread = () => {
         setComments(data.comments);
       }
     } catch (err) {
+      console.error('Error voting:', err);
+    }
+  };
+
+  const handleThreadVote = async (voteType: 'up' | 'down') => {
+    if (!thread || !user) return;
+
+    const hasUpvoted = thread.upvotes.includes(user.id);
+    const hasDownvoted = thread.downvotes.includes(user.id);
+
+    // Prevent double voting in the same direction
+    if ((voteType === 'up' && hasUpvoted) || (voteType === 'down' && hasDownvoted)) {
+      showVoteTooltip('One vote per user');
+      return;
+    }
+
+    // Optimistic update
+    const updatedThread = { ...thread };
+
+    if (voteType === 'up') {
+      updatedThread.upvotes = [...updatedThread.upvotes, user.id];
+      updatedThread.downvotes = updatedThread.downvotes.filter(id => id !== user.id);
+    } else {
+      updatedThread.downvotes = [...updatedThread.downvotes, user.id];
+      updatedThread.upvotes = updatedThread.upvotes.filter(id => id !== user.id);
+    }
+
+    setThread(updatedThread);
+
+    try {
+      await forumService.vote({
+        targetType: 'thread',
+        targetId: thread._id,
+        voteType
+      });
+    } catch (err) {
+      // Revert on error
+      const refreshed = await forumService.getThread(thread._id);
+      setThread(refreshed.thread);
       console.error('Error voting:', err);
     }
   };
@@ -378,7 +424,7 @@ const Thread = () => {
                 size="sm"
                 variant="ghost"
                 className={`p-2 ${hasUpvoted ? 'text-orange-500' : ''}`}
-                onClick={() => handleVote('thread', thread._id, 'up')}
+                onClick={() => handleThreadVote('up')}
               >
                 <ArrowUpIcon className="w-5 h-5" />
               </Button>
@@ -391,7 +437,7 @@ const Thread = () => {
                 size="sm"
                 variant="ghost"
                 className={`p-2 ${hasDownvoted ? 'text-blue-500' : ''}`}
-                onClick={() => handleVote('thread', thread._id, 'down')}
+                onClick={() => handleThreadVote('down')}
               >
                 <ArrowDownIcon className="w-5 h-5" />
               </Button>
@@ -450,6 +496,11 @@ const Thread = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Vote Tooltip */}
+      {voteTooltip && (
+        <div className="text-xs text-red-500 mb-2">{voteTooltip}</div>
+      )}
 
       {/* Comments */}
       <div className="space-y-4">

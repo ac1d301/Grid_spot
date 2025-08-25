@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { User, Trophy, Award, Star, TrendingUp } from 'lucide-react';
 
 interface DriverCardProps {
@@ -17,16 +17,16 @@ interface DriverCardProps {
 
 // Team colors mapping
 const TEAM_COLORS: Record<string, { primary: string; secondary: string; accent: string }> = {
-  'Red Bull Racing': { primary: 'bg-blue-800', secondary: 'bg-blue-900', accent: 'text-yellow-300' },
-  'Ferrari': { primary: 'bg-red-600', secondary: 'bg-red-700', accent: 'text-white' },
-  'McLaren': { primary: 'bg-orange-500', secondary: 'bg-orange-600', accent: 'text-white' },
-  'Mercedes': { primary: 'bg-teal-400', secondary: 'bg-teal-500', accent: 'text-black' },
-  'Aston Martin': { primary: 'bg-green-600', secondary: 'bg-green-700', accent: 'text-white' },
-  'Alpine': { primary: 'bg-blue-500', secondary: 'bg-blue-600', accent: 'text-white' },
-  'Kick Sauber': { primary: 'bg-green-500', secondary: 'bg-green-600', accent: 'text-white' },
-  'Williams': { primary: 'bg-blue-600', secondary: 'bg-blue-700', accent: 'text-white' },
-  'Racing Bulls': { primary: 'bg-blue-700', secondary: 'bg-blue-800', accent: 'text-white' },
-  'Haas': { primary: 'bg-gray-600', secondary: 'bg-gray-700', accent: 'text-white' },
+  'Red Bull Racing': { primary: 'bg-blue-950', secondary: 'bg-blue-900', accent: 'text-blue-300' },
+  'Ferrari': { primary: 'bg-red-900', secondary: 'bg-red-950', accent: 'text-red-300' },
+  'McLaren': { primary: 'bg-orange-900', secondary: 'bg-orange-950', accent: 'text-orange-300' },
+  'Mercedes': { primary: 'bg-teal-900', secondary: 'bg-teal-950', accent: 'text-teal-300' },
+  'Aston Martin': { primary: 'bg-green-900', secondary: 'bg-green-950', accent: 'text-green-300' },
+  'Alpine': { primary: 'bg-blue-900', secondary: 'bg-blue-950', accent: 'text-blue-300' },
+  'Kick Sauber': { primary: 'bg-green-800', secondary: 'bg-green-900', accent: 'text-green-300' },
+  'Williams': { primary: 'bg-blue-900', secondary: 'bg-blue-950', accent: 'text-blue-300' },
+  'Racing Bulls': { primary: 'bg-blue-950', secondary: 'bg-blue-900', accent: 'text-blue-300' },
+  'Haas': { primary: 'bg-gray-800', secondary: 'bg-gray-900', accent: 'text-gray-300' },
 };
 
 const getTeamColors = (team: string | null) => {
@@ -79,82 +79,41 @@ export const DriverCard: React.FC<DriverCardProps> = ({
     transform: 'rotateY(180deg)'
   };
 
+  // Auto-flip back after 2 seconds
+  useEffect(() => {
+    if (isFlipped) {
+      const timer = setTimeout(() => {
+        onFlip();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isFlipped, onFlip]);
+
   return (
     <div className="cursor-pointer" style={flipCardStyle} onClick={onFlip}>
       <div style={flipCardInnerStyle}>
         
         {/* Front of card - Driver Info */}
         <div 
-          className={`relative rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl ${colors.primary}`}
+          className={`relative rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl flex flex-col justify-center items-center ${colors.primary}`}
           style={flipCardFaceStyle}
         >
-          {/* Driver Photo Background */}
-          <div className="absolute inset-0">
-            {photo ? (
-              <img 
-                src={photo} 
-                alt={driverName}
-                className="w-full h-full object-cover object-center opacity-80"
-                style={{ objectPosition: 'center 20%' }}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <User className="h-24 w-24 text-white/50" />
-              </div>
-            )}
-            {/* Gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent"></div>
-          </div>
-
-          {/* Content */}
-          <div className="relative z-10 p-4 h-full flex flex-col justify-between">
-            {/* Top section - Name and Number */}
-            <div>
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <h3 className="text-white font-bold text-lg leading-tight">
-                    {firstName}
-                  </h3>
-                  <h3 className="text-white font-bold text-lg leading-tight">
-                    {lastName}
-                  </h3>
-                  <p className="text-white/80 text-sm font-medium mt-1">
-                    {team?.split(' ')[0] || 'Unknown'}
-                  </p>
-                  <p className="text-white/60 text-xs mt-1">{nationality}</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-3xl font-bold text-white opacity-90">
-                    {driverNumber}
-                  </div>
-                </div>
-              </div>
+          {/* Centered Driver Name with Team Color */}
+          <div className="flex flex-col items-center justify-center h-full w-full">
+            <h3 className={`font-bold text-2xl mb-2 ${colors.accent}`}>{firstName} {lastName}</h3>
+            <span className={`font-semibold text-lg mb-1 ${colors.accent}`}>{team}</span>
+            <span className="text-white/80 text-sm font-medium mb-2">{nationality}</span>
+            <div className="text-3xl font-bold text-white opacity-90 mb-2">
+              #{driverNumber}
             </div>
-
-            {/* Bottom section - Current Season Points */}
-            <div className="mt-auto">
-              <div className="text-center bg-black/40 rounded-lg p-3">
-                <div className="text-2xl font-bold text-white">{currentSeasonPoints}</div>
-                <div className="text-sm text-white/80">Points</div>
-                <div className="text-xs text-white/60 mt-1">Position: P{position}</div>
-              </div>
-              <div className="text-center mt-2">
-                <p className="text-xs text-white/60">Click to view stats</p>
-              </div>
+            <div className="text-center bg-black/40 rounded-lg p-3 w-40 mx-auto mb-2">
+              <div className="text-2xl font-bold text-white">{currentSeasonPoints}</div>
+              <div className="text-sm text-white/80">Points</div>
+              <div className="text-xs text-white/60 mt-1">Position: P{position}</div>
             </div>
-
-            {/* Position indicator for podium positions */}
-            {/* {position <= 3 && (
-              <div className="absolute top-2 right-20">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                  position === 1 ? 'bg-yellow-500 text-black' : 
-                  position === 2 ? 'bg-gray-400 text-black' : 
-                  'bg-amber-600 text-white'
-                }`}>
-                  {position}
-                </div>
-              </div>
-            )} */}
+            <span className="inline-block bg-gray-200 text-black text-xs font-semibold px-3 py-1 rounded-full shadow mt-2">
+              Click to view stats
+            </span>
           </div>
         </div>
 

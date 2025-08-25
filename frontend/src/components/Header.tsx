@@ -1,9 +1,9 @@
-
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { User, Calendar, Home, MessageSquare, Menu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { Tooltip } from '@/components/ui/tooltip';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -44,12 +44,12 @@ const Header = () => {
         <div className="flex items-center space-x-4">
           {isAuthenticated ? (
             <div className="flex items-center space-x-2">
-              <Link to="/profile">
-                <Button variant="ghost" size="sm">
+              <span title="Coming soon">
+                <Button variant="ghost" size="sm" disabled className="cursor-not-allowed opacity-70">
                   <User className="h-4 w-4 mr-1" />
                   {user?.username || 'Profile'}
                 </Button>
-              </Link>
+              </span>
               <Button 
                 variant="ghost" 
                 size="sm"

@@ -1,7 +1,10 @@
 # Formula 1 GridSpot🏁
 
-A modern web application for Formula 1 enthusiasts featuring live driver statistics, race information, and community discussions.
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Click%20Here-red?style=for-the-badge&logo=vercel)](https://grid-spot-web.vercel.app)
+[![GitHub Stars](https://img.shields.io/github/stars/ac1d301/formula1-hub?style=for-the-badge)](https://github.com/ac1d301/formula1-hub)
 
+A modern web application for Formula 1 enthusiasts featuring live driver statistics, race information, and community discussions.  
+Live Demo: [https://grid-spot-web.vercel.app](https://grid-spot-web.vercel.app)
 
 
 ## Features

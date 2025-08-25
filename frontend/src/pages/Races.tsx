@@ -105,103 +105,90 @@ const NextRaceHighlight = () => {
   };
 
   // Determine race status based on sessions - UPDATED LOGIC with Red Theme
-  const determineRaceStatus = (sessionsList: OpenF1Session[]): RaceStatus => {
-    const now = new Date();
-    
-    // Find race session
-    const raceSession = sessionsList.find(s => s.session_name === 'Race');
-    
-    if (!raceSession) {
-      // No race session found - check if this is a completed race or season ended
-      const allSessionsCompleted = sessionsList.every(session => 
-        new Date(session.date_end) < now
-      );
-      
-      if (allSessionsCompleted && sessionsList.length > 0) {
-        // All sessions are completed, this was a past race
-        return {
-          status: 'completed',
-          title: 'LAST RACE',
-          badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' } // Updated to red theme
-        };
-      } else if (sessionsList.length === 0) {
-        // No sessions at all - season might be ended
-        return {
-          status: 'season_ended',
-          title: 'SEASON ENDED',
-          badge: { text: 'SEASON ENDED', class: 'bg-gray-700 text-white' }
-        };
-      } else {
-        // Some sessions upcoming but no race session
-        return { status: 'upcoming', title: 'NEXT RACE' };
-      }
-    }
+const determineRaceStatus = (sessionsList: OpenF1Session[]): RaceStatus => {
+  if (!sessionsList.length) {
+    return {
+      status: 'season_ended',
+      title: 'SEASON ENDED',
+      badge: { text: 'SEASON ENDED', class: 'bg-gray-700 text-white' }
+    };
+  }
 
-    const raceStart = new Date(raceSession.date_start);
-    const raceEnd = new Date(raceSession.date_end);
-    const weekendStart = new Date(raceStart.getTime() - (2 * 24 * 60 * 60 * 1000));
-    const weekendEnd = new Date(raceEnd.getTime() + (2 * 60 * 60 * 1000));
-
-    // Check if race is currently live
-    if (now >= raceStart && now <= raceEnd) {
-      return {
-        status: 'live',
-        title: 'RACE IS LIVE',
-        badge: { text: 'LIVE NOW', class: 'bg-red-600 text-white animate-pulse' }
-      };
-    }
-
-    // Check if it's race weekend (practice sessions might be live)
-    const anySessionLive = sessionsList.some(session => {
-      const sessionStart = new Date(session.date_start);
-      const sessionEnd = new Date(session.date_end);
-      return now >= sessionStart && now <= sessionEnd;
-    });
-
-    if (anySessionLive) {
-      const liveSession = sessionsList.find(session => {
-        const sessionStart = new Date(session.date_start);
-        const sessionEnd = new Date(session.date_end);
-        return now >= sessionStart && now <= sessionEnd;
-      });
-
-      return {
-        status: 'live',
-        title: `${liveSession?.session_name.toUpperCase()} IS LIVE`,
-        badge: { text: `${liveSession?.session_name} LIVE`, class: 'bg-red-600 text-white animate-pulse' }
-      };
-    }
-
-    // Check if it's race weekend but no session is live
-    if (now >= weekendStart && now <= weekendEnd) {
-      if (now > raceEnd) {
-        return {
-          status: 'just_finished',
-          title: 'RACE JUST FINISHED',
-          badge: { text: 'JUST FINISHED', class: 'bg-red-700 text-white' } // Updated to red theme
-        };
-      } else {
-        return {
-          status: 'this_weekend',
-          title: 'THIS WEEKEND',
-          badge: { text: 'RACE WEEKEND', class: 'bg-red-500 text-white' } // Updated to red theme
-        };
-      }
-    }
-
-    // Check if race recently completed (within 7 days)
-    const daysSinceRace = Math.abs(now.getTime() - raceEnd.getTime()) / (1000 * 60 * 60 * 24);
-    if (now > raceEnd && daysSinceRace <= 7) {
+  const now = new Date();
+  const sortedSessions = [...sessionsList].sort((a, b) => 
+    new Date(a.date_start).getTime() - new Date(b.date_start).getTime()
+  );
+  
+  const firstSession = sortedSessions[0];
+  const raceSession = sessionsList.find(s => s.session_name === 'Race');
+  
+  if (!raceSession) {
+    // If all sessions are in the past
+    if (sessionsList.every(s => new Date(s.date_end) < now)) {
       return {
         status: 'completed',
         title: 'LAST RACE',
-        badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' } // Updated to red theme
+        badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' }
       };
     }
-
-    // Upcoming race
     return { status: 'upcoming', title: 'NEXT RACE' };
+  }
+
+  const raceStart = new Date(raceSession.date_start);
+  const raceEnd = new Date(raceSession.date_end);
+  const weekendStart = new Date(firstSession.date_start);
+  const weekendEnd = new Date(raceEnd.getTime() + (2 * 60 * 60 * 1000)); // 2 hours after race end
+
+  // Check if any session is currently live
+  const liveSession = sessionsList.find(session => {
+    const sessionStart = new Date(session.date_start);
+    const sessionEnd = new Date(session.date_end);
+    return now >= sessionStart && now <= sessionEnd;
+  });
+
+  if (liveSession) {
+    return {
+      status: 'live',
+      title: `${liveSession.session_name.toUpperCase()} IS LIVE`,
+      badge: { text: `${liveSession.session_name} LIVE`, class: 'bg-red-600 text-white animate-pulse' }
+    };
+  }
+
+  // Check if race weekend is in progress
+  if (now >= weekendStart && now <= weekendEnd) {
+    return {
+      status: 'this_weekend',
+      title: 'THIS WEEKEND',
+      badge: { text: 'RACE WEEKEND', class: 'bg-red-500 text-white' }
+    };
+  }
+
+  // Check if race just finished (within last 7 days)
+  const daysSinceRace = (now.getTime() - raceEnd.getTime()) / (1000 * 60 * 60 * 24);
+  if (now > raceEnd && daysSinceRace <= 7) {
+    return {
+      status: 'just_finished',
+      title: 'LAST RACE',
+      badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' }
+    };
+  }
+
+  // Check if race is completed
+  if (now > raceEnd) {
+    return {
+      status: 'completed',
+      title: 'LAST RACE',
+      badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' }
+    };
+  }
+
+  // Default to upcoming race
+  return { 
+    status: 'upcoming', 
+    title: 'NEXT RACE' 
   };
+};
+
 
   // Get session status
   const getSessionStatus = (session: OpenF1Session) => {
@@ -584,7 +571,7 @@ const NextRaceHighlight = () => {
       </CardHeader>
       
       <CardContent className="space-y-6 bg-gradient-to-b from-transparent to-zinc-900/50">
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-6 p-5">
           {/* Session Schedule */}
           <div className="space-y-4">
             <h3 className="text-xl font-semibold flex items-center gap-2 text-zinc-100">

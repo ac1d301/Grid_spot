@@ -196,7 +196,7 @@ const Home = () => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link to="/forum">
                 <Button size="lg" className="bg-red-600 hover:bg-red-700 text-white px-8 py-3">
-                  <Calendar className="mr-2 h-5 w-5" />
+                  {/* <Calendar className="mr-2 h-5 w-5" /> */}
                   Join a Discussion
                 </Button>
               </Link>

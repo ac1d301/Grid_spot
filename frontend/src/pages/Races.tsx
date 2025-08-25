@@ -105,90 +105,89 @@ const NextRaceHighlight = () => {
   };
 
   // Determine race status based on sessions - UPDATED LOGIC with Red Theme
-const determineRaceStatus = (sessionsList: OpenF1Session[]): RaceStatus => {
-  if (!sessionsList.length) {
-    return {
-      status: 'season_ended',
-      title: 'SEASON ENDED',
-      badge: { text: 'SEASON ENDED', class: 'bg-gray-700 text-white' }
-    };
-  }
+  const determineRaceStatus = (sessionsList: OpenF1Session[]): RaceStatus => {
+    if (!sessionsList.length) {
+      return {
+        status: 'season_ended',
+        title: 'SEASON ENDED',
+        badge: { text: 'SEASON ENDED', class: 'bg-gray-700 text-white' }
+      };
+    }
 
-  const now = new Date();
-  const sortedSessions = [...sessionsList].sort((a, b) => 
-    new Date(a.date_start).getTime() - new Date(b.date_start).getTime()
-  );
-  
-  const firstSession = sortedSessions[0];
-  const raceSession = sessionsList.find(s => s.session_name === 'Race');
-  
-  if (!raceSession) {
-    // If all sessions are in the past
-    if (sessionsList.every(s => new Date(s.date_end) < now)) {
+    const now = new Date();
+    const sortedSessions = [...sessionsList].sort((a, b) => 
+      new Date(a.date_start).getTime() - new Date(b.date_start).getTime()
+    );
+    
+    const firstSession = sortedSessions[0];
+    const raceSession = sessionsList.find(s => s.session_name === 'Race');
+    
+    if (!raceSession) {
+      // If all sessions are in the past
+      if (sessionsList.every(s => new Date(s.date_end) < now)) {
+        return {
+          status: 'completed',
+          title: 'LAST RACE',
+          badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' }
+        };
+      }
+      return { status: 'upcoming', title: 'NEXT RACE' };
+    }
+
+    const raceStart = new Date(raceSession.date_start);
+    const raceEnd = new Date(raceSession.date_end);
+    const weekendStart = new Date(firstSession.date_start);
+    const weekendEnd = new Date(raceEnd.getTime() + (2 * 60 * 60 * 1000)); // 2 hours after race end
+
+    // Check if any session is currently live
+    const liveSession = sessionsList.find(session => {
+      const sessionStart = new Date(session.date_start);
+      const sessionEnd = new Date(session.date_end);
+      return now >= sessionStart && now <= sessionEnd;
+    });
+
+    if (liveSession) {
+      return {
+        status: 'live',
+        title: `${liveSession.session_name.toUpperCase()} IS LIVE`,
+        badge: { text: `${liveSession.session_name} LIVE`, class: 'bg-red-600 text-white animate-pulse' }
+      };
+    }
+
+    // Check if race weekend is in progress
+    if (now >= weekendStart && now <= weekendEnd) {
+      return {
+        status: 'this_weekend',
+        title: 'THIS WEEKEND',
+        badge: { text: 'RACE WEEKEND', class: 'bg-red-500 text-white' }
+      };
+    }
+
+    // Check if race just finished (within last 7 days)
+    const daysSinceRace = (now.getTime() - raceEnd.getTime()) / (1000 * 60 * 60 * 24);
+    if (now > raceEnd && daysSinceRace <= 7) {
+      return {
+        status: 'just_finished',
+        title: 'LAST RACE',
+        badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' }
+      };
+    }
+
+    // Check if race is completed
+    if (now > raceEnd) {
       return {
         status: 'completed',
         title: 'LAST RACE',
         badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' }
       };
     }
-    return { status: 'upcoming', title: 'NEXT RACE' };
-  }
 
-  const raceStart = new Date(raceSession.date_start);
-  const raceEnd = new Date(raceSession.date_end);
-  const weekendStart = new Date(firstSession.date_start);
-  const weekendEnd = new Date(raceEnd.getTime() + (2 * 60 * 60 * 1000)); // 2 hours after race end
-
-  // Check if any session is currently live
-  const liveSession = sessionsList.find(session => {
-    const sessionStart = new Date(session.date_start);
-    const sessionEnd = new Date(session.date_end);
-    return now >= sessionStart && now <= sessionEnd;
-  });
-
-  if (liveSession) {
-    return {
-      status: 'live',
-      title: `${liveSession.session_name.toUpperCase()} IS LIVE`,
-      badge: { text: `${liveSession.session_name} LIVE`, class: 'bg-red-600 text-white animate-pulse' }
+    // Default to upcoming race
+    return { 
+      status: 'upcoming', 
+      title: 'NEXT RACE' 
     };
-  }
-
-  // Check if race weekend is in progress
-  if (now >= weekendStart && now <= weekendEnd) {
-    return {
-      status: 'this_weekend',
-      title: 'THIS WEEKEND',
-      badge: { text: 'RACE WEEKEND', class: 'bg-red-500 text-white' }
-    };
-  }
-
-  // Check if race just finished (within last 7 days)
-  const daysSinceRace = (now.getTime() - raceEnd.getTime()) / (1000 * 60 * 60 * 24);
-  if (now > raceEnd && daysSinceRace <= 7) {
-    return {
-      status: 'just_finished',
-      title: 'LAST RACE',
-      badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' }
-    };
-  }
-
-  // Check if race is completed
-  if (now > raceEnd) {
-    return {
-      status: 'completed',
-      title: 'LAST RACE',
-      badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' }
-    };
-  }
-
-  // Default to upcoming race
-  return { 
-    status: 'upcoming', 
-    title: 'NEXT RACE' 
   };
-};
-
 
   // Get session status
   const getSessionStatus = (session: OpenF1Session) => {
@@ -498,88 +497,107 @@ const determineRaceStatus = (sessionsList: OpenF1Session[]): RaceStatus => {
 
   if (loading) {
     return (
-      <Card className="mb-8 bg-zinc-900 border-zinc-800">
-        <CardHeader>
-          <div className="h-8 bg-zinc-800 rounded w-1/2 mx-auto animate-pulse" />
-        </CardHeader>
-        <CardContent>
-          <LoadingSkeleton lines={5} />
-        </CardContent>
-      </Card>
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-7xl mx-auto">
+          <Card className="mb-8 bg-zinc-900 border-zinc-800">
+            <CardHeader>
+              <div className="h-8 bg-zinc-800 rounded w-1/2 mx-auto animate-pulse" />
+            </CardHeader>
+            <CardContent>
+              <LoadingSkeleton lines={5} />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     );
   }
 
   if (apiError || sessions.length === 0) {
     return (
-      <Card className="mb-8 bg-zinc-900 border-zinc-800">
-        <CardContent className="text-center py-8">
-          <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-          <p className="text-zinc-100 font-medium">No race data available</p>
-          <p className="text-zinc-400 text-sm mt-2">Please check back during race weekends</p>
-          <button 
-            onClick={handleRefresh}
-            className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-          >
-            Try Again
-          </button>
-        </CardContent>
-      </Card>
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-7xl mx-auto">
+          <Card className="mb-8 bg-zinc-900 border-zinc-800">
+            <CardContent className="text-center py-8">
+              <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+              <p className="text-zinc-100 font-medium">No race data available</p>
+              <p className="text-zinc-400 text-sm mt-2">Please check back during race weekends</p>
+              <button 
+                onClick={handleRefresh}
+                className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+              >
+                Try Again
+              </button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     );
   }
 
   const meetingInfo = sessions[0];
 
   return (
-    <Card className="mb-8 bg-gradient-to-br from-zinc-900 via-black to-zinc-900 text-white border-zinc-800 shadow-2xl shadow-red-900/20">
-      <CardHeader className="text-center pb-4 border-b border-zinc-800/50">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <Flag className="h-6 w-6 text-red-400" />
-          <CardTitle className="text-2xl font-bold text-zinc-100">
-            {raceStatus.title}
-          </CardTitle>
-          {raceStatus.badge && (
-            <Badge className={`text-xs font-bold ${raceStatus.badge.class}`}>
-              {raceStatus.badge.text}
-            </Badge>
-          )}
-        </div>
-        <div className="text-4xl font-bold bg-gradient-to-r from-red-400 via-red-500 to-red-600 bg-clip-text text-transparent">
-          {(meetingInfo?.country_name || '').toUpperCase()} GRAND PRIX
-        </div>
-        <p className="text-zinc-300 text-lg flex items-center justify-center gap-2">
-          <MapPin className="h-4 w-4 text-red-400" />
-          {meetingInfo?.circuit_short_name} • {meetingInfo?.location}
-        </p>
-        <div className="mt-2 flex items-center justify-center gap-4">
-          <p className="text-red-400 text-sm font-semibold">
-            🏁 Round {meetingInfo?.year === 2025 ? '15' : '14'} of 24 • {meetingInfo?.year}
-          </p>
-          {lastUpdated && (
-            <div className="flex items-center gap-2 text-xs text-zinc-400">
-              <Clock className="h-3 w-3" />
-              <span>Updated: {lastUpdated.toLocaleTimeString()}</span>
-              <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="p-1 hover:bg-zinc-700 rounded transition-colors"
-              >
-                <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
-              </button>
+    <div className="min-h-screen bg-background">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-br from-zinc-900 via-black to-zinc-900 text-white shadow-2xl shadow-red-900/20">
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          {/* Header */}
+          <div className="text-center pb-8 border-b border-zinc-800/50">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <Flag className="h-6 w-6 text-red-400" />
+              <h1 className="text-3xl md:text-4xl font-bold text-zinc-100">
+                {raceStatus.title}
+              </h1>
+              {raceStatus.badge && (
+                <Badge className={`text-sm font-bold ${raceStatus.badge.class}`}>
+                  {raceStatus.badge.text}
+                </Badge>
+              )}
             </div>
-          )}
-        </div>
-      </CardHeader>
-      
-      <CardContent className="space-y-6 bg-gradient-to-b from-transparent to-zinc-900/50">
-        <div className="grid md:grid-cols-2 gap-6 p-5">
-          {/* Session Schedule */}
-          <div className="space-y-4">
-            <h3 className="text-xl font-semibold flex items-center gap-2 text-zinc-100">
-              <Clock className="h-5 w-5 text-red-400" />
-              Session Schedule (IST)
-            </h3>
             
-            <div className="space-y-3">
+            <div className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-red-400 via-red-500 to-red-600 bg-clip-text text-transparent mb-4">
+              {(meetingInfo?.country_name || '').toUpperCase()} GRAND PRIX
+            </div>
+            
+            <p className="text-zinc-300 text-lg flex items-center justify-center gap-2 mb-4">
+              <MapPin className="h-4 w-4 text-red-400" />
+              {meetingInfo?.circuit_short_name} • {meetingInfo?.location}
+            </p>
+            
+            <div className="flex items-center justify-center gap-6 flex-wrap">
+              <p className="text-red-400 text-sm font-semibold">
+                🏁 Round {meetingInfo?.year === 2025 ? '15' : '14'} of 24 • {meetingInfo?.year}
+              </p>
+              {lastUpdated && (
+                <div className="flex items-center gap-2 text-xs text-zinc-400">
+                  <Clock className="h-3 w-3" />
+                  <span>Updated: {lastUpdated.toLocaleTimeString()}</span>
+                  <button
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="p-1 hover:bg-zinc-700 rounded transition-colors"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="grid md:grid-cols-2 gap-8">
+          {/* Session Schedule */}
+          <Card className="bg-zinc-900/50 border-zinc-800">
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold flex items-center gap-2 text-zinc-100">
+                <Clock className="h-5 w-5 text-red-400" />
+                Session Schedule (IST)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               {sessions
                 .sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime())
                 .map((session) => {
@@ -647,75 +665,80 @@ const determineRaceStatus = (sessionsList: OpenF1Session[]): RaceStatus => {
                     </div>
                   );
                 })}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Results and Track Info */}
-          <div className="space-y-4">
-            <h3 className="text-xl font-semibold flex items-center gap-2 text-zinc-100">
-              <Trophy className="h-5 w-5 text-red-400" />
-              Session Results
-            </h3>
-            
-            <div className="bg-zinc-800/40 border border-zinc-700/50 rounded-lg p-4">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-zinc-700/30">
-                  <span className="text-sm font-medium text-zinc-300">Practice (Fastest):</span>
-                  <span className="font-bold text-zinc-100">
-                    {getWinner('Practice 1') !== '—' ? getWinner('Practice 1') : 
-                     getWinner('Practice 2') !== '—' ? getWinner('Practice 2') : 
-                     getWinner('Practice 3') !== '—' ? getWinner('Practice 3') : '—'}
-                  </span>
-                </div>
-                
-                <div className="flex justify-between items-center py-2 border-b border-zinc-700/30">
-                  <span className="text-sm font-medium text-zinc-300">Qualifying (Pole):</span>
-                  <span className="font-bold text-zinc-100">{getWinner('Qualifying')}</span>
-                </div>
-                
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm font-medium text-zinc-300">Race Winner:</span>
-                  <div className="text-right">
-                    <span className="font-bold text-red-400 text-lg block">
-                      {getWinner('Race')}
+          <div className="space-y-6">
+            {/* Session Results */}
+            <Card className="bg-zinc-900/50 border-zinc-800">
+              <CardHeader>
+                <CardTitle className="text-xl font-semibold flex items-center gap-2 text-zinc-100">
+                  <Trophy className="h-5 w-5 text-red-400" />
+                  Session Results
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center py-3 border-b border-zinc-700/30">
+                    <span className="text-sm font-medium text-zinc-300">Practice (Fastest):</span>
+                    <span className="font-bold text-zinc-100">
+                      {getWinner('Practice 1') !== '—' ? getWinner('Practice 1') : 
+                       getWinner('Practice 2') !== '—' ? getWinner('Practice 2') : 
+                       getWinner('Practice 3') !== '—' ? getWinner('Practice 3') : '—'}
                     </span>
-                    {getWinner('Race') !== '—' && (
-                      <span className="text-xs text-zinc-500">Champion</span>
-                    )}
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-3 border-b border-zinc-700/30">
+                    <span className="text-sm font-medium text-zinc-300">Qualifying (Pole):</span>
+                    <span className="font-bold text-zinc-100">{getWinner('Qualifying')}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-3">
+                    <span className="text-sm font-medium text-zinc-300">Race Winner:</span>
+                    <div className="text-right">
+                      <span className="font-bold text-red-400 text-lg block">
+                        {getWinner('Race')}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             {/* Track Info */}
-            <div className="bg-zinc-800/40 border border-zinc-700/50 rounded-lg p-4">
-              <h4 className="text-lg font-semibold mb-3 flex items-center gap-2 text-zinc-100">
-                <MapPin className="h-5 w-5 text-red-400" />
-                {meetingInfo?.circuit_short_name}
-              </h4>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-zinc-400">Location:</span>
-                  <span className="font-bold text-zinc-200">{meetingInfo?.location}</span>
+            <Card className="bg-zinc-900/50 border-zinc-800">
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold flex items-center gap-2 text-zinc-100">
+                  <MapPin className="h-5 w-5 text-red-400" />
+                  {meetingInfo?.circuit_short_name}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Location:</span>
+                    <span className="font-bold text-zinc-200">{meetingInfo?.location}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Country:</span>
+                    <span className="font-bold text-zinc-200">{meetingInfo?.country_name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Year:</span>
+                    <span className="font-bold text-zinc-200">{meetingInfo?.year}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">GMT Offset:</span>
+                    <span className="font-bold text-zinc-200">{meetingInfo?.gmt_offset}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-400">Country:</span>
-                  <span className="font-bold text-zinc-200">{meetingInfo?.country_name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-400">Year:</span>
-                  <span className="font-bold text-zinc-200">{meetingInfo?.year}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-400">GMT Offset:</span>
-                  <span className="font-bold text-zinc-200">{meetingInfo?.gmt_offset}</span>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 };
 

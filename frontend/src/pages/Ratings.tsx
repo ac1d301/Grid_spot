@@ -714,7 +714,7 @@ const Ratings = () => {
                 F1 DRIVERS <span className="f1-gradient bg-clip-text text-transparent">{currentYear}</span>
               </h1>
               <p className="text-xl text-muted-foreground">
-                Loading live championship standings...
+                Loading championship standings...
               </p>
             </div>
           </div>
@@ -739,17 +739,17 @@ const Ratings = () => {
               F1 DRIVERS <span className="f1-gradient bg-clip-text text-transparent">{currentYear}</span>
             </h1>
             <p className="text-xl text-muted-foreground">
-              Live championship standings for the {currentYear} season
+              Championship standings for the {currentYear} season
             </p>
             <div className="flex items-center justify-center gap-4 mt-2">
               <p className="text-sm text-muted-foreground">
                 Showing {filteredStandings.length} of {standings.length} drivers
               </p>
-              {lastUpdated && (
+              {/* {lastUpdated && (
                 <p className="text-xs text-muted-foreground">
                   Last updated: {lastUpdated.toLocaleTimeString()}
                 </p>
-              )}
+              )} */}
               {error && (
                 <Badge variant="outline" className="text-orange-600">
                   {error}

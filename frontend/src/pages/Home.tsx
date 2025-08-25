@@ -180,7 +180,7 @@ const Home = () => {
               FORMULA 1 Grid Spot
             </h1>
             <p className="text-xl md:text-2xl mb-8 text-gray-300 leading-relaxed">
-              Experience Formula 1 like never before. Live race data, championship standings, 
+              Experience Formula 1 like never before. Live Discussions, Championship standings, 
               and comprehensive race calendar all in one place.
             </p>
             

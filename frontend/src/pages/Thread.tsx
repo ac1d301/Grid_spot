@@ -460,16 +460,16 @@ const Thread = () => {
                 <span>by {thread.author.username}</span>
                 <span>•</span>
                 <span>{formatDistanceToNow(new Date(thread.createdAt), { addSuffix: true })}</span>
-                <span>•</span>
-                <div className="flex items-center gap-1">
+                {/* <span>•</span> */}
+                {/* <div className="flex items-center gap-1">
                   <Eye className="w-4 h-4" />
                   <span>{thread.views} views</span>
                 </div>
-                <span>•</span>
-                <div className="flex items-center gap-1">
+                <span>•</span> */}
+                {/* <div className="flex items-center gap-1">
                   <MessageSquare className="w-4 h-4" />
                   <span>{thread.commentCount} comments</span>
-                </div>
+                </div> */}
               </div>
 
               <div className="prose dark:prose-invert max-w-none">

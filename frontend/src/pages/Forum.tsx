@@ -204,9 +204,9 @@ const Forum = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold">F1 Forum</h1>
+          <h1 className="text-3xl font-bold">Pit Lane Chat</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Discuss all things Formula 1
+            The Ultimate Forum for F1 Fans to Discuss, Debate, and Share Their Passion for Racing
           </p>
         </div>
         

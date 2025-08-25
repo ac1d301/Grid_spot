@@ -1,12 +1,6 @@
 {
   "name": "f1-hub-frontend",
   "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build"
-    }
-  ],
   "rewrites": [
     {
       "source": "/(.*)",

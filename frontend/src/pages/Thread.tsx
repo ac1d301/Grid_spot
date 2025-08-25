@@ -121,6 +121,22 @@ const Thread = () => {
     }
   };
 
+  // Helper to update a comment (by id) recursively in the comments tree
+  function updateCommentTree(comments: Comment[], commentId: string, updater: (c: Comment) => Comment): Comment[] {
+    return comments.map(comment => {
+      if (comment._id === commentId) {
+        return updater(comment);
+      }
+      if (comment.replies && comment.replies.length > 0) {
+        return {
+          ...comment,
+          replies: updateCommentTree(comment.replies, commentId, updater)
+        };
+      }
+      return comment;
+    });
+  }
+
   const handleEditSubmit = async (commentId: string) => {
     if (!editContent.trim()) return;
 
@@ -128,8 +144,14 @@ const Thread = () => {
       await forumService.updateComment(commentId, editContent);
       setEditingComment(null);
       setEditContent('');
-      const data = await forumService.getThread(id!);
-      setComments(data.comments);
+      // Update edited comment in state
+      setComments(prevComments =>
+        updateCommentTree(prevComments, commentId, (comment) => ({
+          ...comment,
+          content: editContent,
+          isEdited: true
+        }))
+      );
     } catch (err) {
       console.error('Error editing comment:', err);
     }
@@ -213,55 +235,46 @@ const Thread = () => {
     }
   };
 
+  // Update handleCommentVote to use updateCommentTree
   const handleCommentVote = async (commentId: string, voteType: 'like' | 'dislike') => {
     if (!user) {
       showVoteTooltip('Please login to vote');
       return;
     }
 
-    const commentIndex = comments.findIndex(c => c._id === commentId);
-    if (commentIndex === -1) return;
+    // Find and update comment recursively
+    setComments(prevComments =>
+      updateCommentTree(prevComments, commentId, (comment) => {
+        const likes = comment.likes || [];
+        const dislikes = comment.dislikes || [];
+        const hasLiked = likes.includes(user.id);
+        const hasDisliked = dislikes.includes(user.id);
 
-    const comment = comments[commentIndex];
-    const likes = comment.likes || [];
-    const dislikes = comment.dislikes || [];
-    const hasLiked = likes.includes(user.id);
-    const hasDisliked = dislikes.includes(user.id);
+        let newLikes = likes.filter(id => id !== user.id);
+        let newDislikes = dislikes.filter(id => id !== user.id);
 
-    // Create new arrays without mutating originals
-    let newLikes = [...likes];
-    let newDislikes = [...dislikes];
+        const isTogglingOff = (voteType === 'like' && hasLiked) || (voteType === 'dislike' && hasDisliked);
 
-    // Remove user from both arrays first
-    newLikes = newLikes.filter(id => id !== user.id);
-    newDislikes = newDislikes.filter(id => id !== user.id);
+        if (!isTogglingOff) {
+          if (voteType === 'like') {
+            newLikes.push(user.id);
+            showVoteTooltip('Liked!');
+          } else {
+            newDislikes.push(user.id);
+            showVoteTooltip('Disliked!');
+          }
+        } else {
+          showVoteTooltip('Vote removed');
+        }
 
-    // Check if user is toggling off the same vote
-    const isTogglingOff = (voteType === 'like' && hasLiked) || (voteType === 'dislike' && hasDisliked);
-
-    if (!isTogglingOff) {
-      // Add new vote
-      if (voteType === 'like') {
-        newLikes.push(user.id);
-        showVoteTooltip('Liked!');
-      } else {
-        newDislikes.push(user.id);
-        showVoteTooltip('Disliked!');
-      }
-    } else {
-      showVoteTooltip('Vote removed');
-    }
-
-    // Optimistic update
-    const updatedComments = [...comments];
-    const updatedComment = {
-      ...comment,
-      likes: newLikes,
-      dislikes: newDislikes,
-      score: newLikes.length - newDislikes.length
-    };
-    updatedComments[commentIndex] = updatedComment;
-    setComments(updatedComments);
+        return {
+          ...comment,
+          likes: newLikes,
+          dislikes: newDislikes,
+          score: newLikes.length - newDislikes.length
+        };
+      })
+    );
 
     try {
       await forumService.vote({
@@ -392,7 +405,7 @@ const Thread = () => {
 
                       {comment.author._id === user?.id && (
                         <>
-                          <Button
+                          {/* <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => {
@@ -402,7 +415,7 @@ const Thread = () => {
                           >
                             <Edit className="w-3 h-3 mr-1" />
                             Edit
-                          </Button>
+                          </Button> */}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -417,7 +430,7 @@ const Thread = () => {
                     </div>
 
                     {replyTo === comment._id && (
-                      <div className="space-y-3 mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <div className="space-y-3 mt-3 p-3 bg-gray-100/5 rounded-lg">
                         <Textarea
                           value={newComment}
                           onChange={(e) => setNewComment(e.target.value)}

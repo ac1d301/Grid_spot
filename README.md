@@ -1,16 +1,19 @@
 # Formula 1 GridSpot🏁
 
-A modern web application for Formula 1 enthusiasts featuring live driver statistics, race information, and community discussions.
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Click%20Here-red?style=for-the-badge&logo=vercel)](https://grid-spot-web.vercel.app)
+[![GitHub Stars](https://img.shields.io/github/stars/ac1d301/Grid-spot-web?style=for-the-badge)](https://github.com/ac1d301/Grid-spot-web)
 
+A modern web application for Formula 1 enthusiasts featuring live driver statistics, race information, and community discussions.  
+Live Demo: [https://grid-spot-web.vercel.app](https://grid-spot-web.vercel.app)
 
 
 ## Features
 
-- **Live Driver Statistics** - Real-time F1 standings calculated from OpenF1 API
+- **Race Results** - Real-time F1 race results calculated from OpenF1 API
 - **Race Information** - Live race schedules and weekend countdowns  
-- **Driver Ratings** - Community-driven driver performance ratings
+- **Driver Statistics** - Current Season driver stats and also their carrer stats
 - **Discussion Forum** - Real-time community discussions with WebSocket
-- **Season & Career Views** - Toggle between current season and career stats
+- **2025 Season Calender View** - View the calender to know the Race dates and other stuff
 
 ## Quick Start
 
@@ -65,18 +68,6 @@ http://localhost:3000
 **External APIs**
 - OpenF1 API for live F1 data
 
-## Screenshots
-
-<div align="center">
-
-### Driver Statistics
-
-
-### Live Race Information  
-
-
-</div>
-
 ## Environment Variables
 
 Create a `.env` file in the backend directory:
@@ -92,9 +83,8 @@ PORT=5001
 
 1. **Register/Login** to access all features
 2. **View Driver Stats** - Toggle between season and career statistics  
-3. **Rate Drivers** - Submit ratings for race performances
-4. **Join Discussions** - Participate in community forums
-5. **Track Races** - Get live updates on race weekends
+3. **Join Discussions** - Participate in community forums
+4. **Track Races** - Get live updates on race weekends
 
 ## Contributing
 
@@ -113,7 +103,7 @@ PORT=5001
 
 📞 Support
 
-Having issues? [Open an issue](https://github.com/ac1d301/formula1-hub/issues) or reach out to [diffv27l@gmail.com](mailto:diffv27@gmail.com.com)
+Having issues? [Open an issue](https://github.com/ac1d301/Grid-spot-web/issues) or reach out to [diffv27l@gmail.com](mailto:diffv27@gmail.com.com)
 
 <div align="center">
 Made with passion for F1 fans INDIA

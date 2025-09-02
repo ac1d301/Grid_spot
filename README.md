@@ -101,7 +101,7 @@ PORT=5001
 - [shadcn/ui](https://ui.shadcn.com/) for UI components
 - Formula 1 community for inspiration
 
-📞 Support
+ Support
 
 Having issues? [Open an issue](https://github.com/ac1d301/Grid-spot-web/issues) or reach out to [diffv27l@gmail.com](mailto:diffv27@gmail.com.com)
 

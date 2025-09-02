@@ -27,20 +27,20 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 const corsOptions = {
   origin: function (origin, callback) {
-    console.log('🌐 CORS check for origin:', origin);
+    console.log(' CORS check for origin:', origin);
     
     // Allow requests with no origin
     if (!origin) {
-      console.log('✅ CORS allowed for no origin request');
+      console.log(' CORS allowed for no origin request');
       return callback(null, true);
     }
     
     if (allowedOrigins.includes(origin)) {
-      console.log('✅ CORS allowed for:', origin);
+      console.log(' CORS allowed for:', origin);
       callback(null, true);
     } else {
-      console.log('❌ CORS blocked for:', origin);
-      console.log('📋 Allowed origins:', allowedOrigins);
+      console.log(' CORS blocked for:', origin);
+      console.log(' Allowed origins:', allowedOrigins);
       callback(new Error('Not allowed by CORS'), false);
     }
   },
@@ -64,8 +64,8 @@ app.use((req, res, next) => {
 
 // Database connection
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+  .then(() => console.log(' Connected to MongoDB'))
+  .catch(err => console.error(' MongoDB connection error:', err));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -101,8 +101,8 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5001;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌐 Allowed origins: ${allowedOrigins.join(', ')}`);
+  console.log(` Server running on port ${PORT}`);
+  console.log(` Allowed origins: ${allowedOrigins.join(', ')}`);
 });
 
 module.exports = app;

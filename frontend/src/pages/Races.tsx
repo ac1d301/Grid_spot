@@ -207,7 +207,7 @@ const NextRaceHighlight = () => {
   // Fetch driver information
   const fetchDrivers = async () => {
     try {
-      console.log('👥 Fetching driver information...');
+      console.log('Fetching driver information...');
       const response = await fetch('https://api.openf1.org/v1/drivers');
       
       if (response.ok) {
@@ -221,10 +221,10 @@ const NextRaceHighlight = () => {
         });
         
         setDrivers(driverMap);
-        console.log('✅ Loaded', Object.keys(driverMap).length, 'drivers');
+        console.log('Loaded', Object.keys(driverMap).length, 'drivers');
       }
     } catch (error) {
-      console.log('⚠️ Failed to fetch drivers:', error);
+      console.log('Failed to fetch drivers:', error);
     }
   };
 
@@ -233,10 +233,10 @@ const NextRaceHighlight = () => {
     if (!isRefresh) setLoading(true);
     else setIsRefreshing(true);
     
-    console.log('🔍 Starting F1 data fetch...');
+    console.log(' Starting F1 data fetch...');
 
     try {
-      console.log('📡 Attempting OpenF1 API calls...');
+      console.log(' Attempting OpenF1 API calls...');
       
       // Prioritize 2025 data, then fall back to latest
       const apiUrls = [
@@ -249,16 +249,16 @@ const NextRaceHighlight = () => {
       
       for (let i = 0; i < apiUrls.length; i++) {
         try {
-          console.log(`📞 Trying API ${i + 1}: ${apiUrls[i]}`);
+          console.log(` Trying API ${i + 1}: ${apiUrls[i]}`);
           const response = await fetch(apiUrls[i]);
           
           if (!response.ok) {
-            console.log(`❌ API ${i + 1} failed with status:`, response.status);
+            console.log(` API ${i + 1} failed with status:`, response.status);
             continue;
           }
           
           const data = await response.json();
-          console.log(`📊 API ${i + 1} returned:`, data?.length || 0, 'sessions');
+          console.log(` API ${i + 1} returned:`, data?.length || 0, 'sessions');
           
           if (data && Array.isArray(data) && data.length > 0) {
             allSessions = data;
@@ -266,7 +266,7 @@ const NextRaceHighlight = () => {
             break;
           }
         } catch (err) {
-          console.log(`❌ API ${i + 1} error:`, err);
+          console.log(` API ${i + 1} error:`, err);
           continue;
         }
       }
@@ -315,7 +315,7 @@ const NextRaceHighlight = () => {
 
       if (currentWeekendMeeting) {
         targetMeeting = currentWeekendMeeting;
-        console.log('📊 Using current race weekend');
+        console.log(' Using current race weekend');
       } else {
         // Find next upcoming meeting
         targetMeeting = meetings.find(meeting => meeting.raceDate > now);
@@ -323,9 +323,9 @@ const NextRaceHighlight = () => {
         if (!targetMeeting) {
           // No upcoming meetings, get the most recent completed one
           targetMeeting = meetings.filter(meeting => meeting.raceDate <= now).pop();
-          console.log('📊 Using most recent completed race');
+          console.log('Using most recent completed race');
         } else {
-          console.log('📊 Using next upcoming race');
+          console.log(' Using next upcoming race');
         }
       }
 
@@ -341,10 +341,10 @@ const NextRaceHighlight = () => {
       
       setApiError(null);
       setLastUpdated(new Date());
-      console.log('✅ Successfully loaded race data for:', targetMeeting.sessions[0]?.country_name);
+      console.log(' Successfully loaded race data for:', targetMeeting.sessions[0]?.country_name);
 
     } catch (error) {
-      console.log('❌ All APIs failed:', error);
+      console.log(' All APIs failed:', error);
       setApiError('Unable to load race data');
       setSessions([]);
     } finally {
@@ -357,7 +357,7 @@ const NextRaceHighlight = () => {
   const fetchResults = async (sessionsList: OpenF1Session[]) => {
     if (sessionsList.length === 0) return;
 
-    console.log('🏆 Fetching session results...');
+    console.log(' Fetching session results...');
     
     const mainSessions = sessionsList.filter(session => 
       ['Practice 1', 'Practice 2', 'Practice 3', 'Qualifying', 'Race'].includes(session.session_name) ||
@@ -373,19 +373,19 @@ const NextRaceHighlight = () => {
         );
         
         if (!response.ok) {
-          console.log(`⚠️ No results for ${session.session_name} (${response.status})`);
+          console.log(` No results for ${session.session_name} (${response.status})`);
           return { sessionName: session.session_name, results: [] };
         }
         
         const sessionResults = await response.json();
-        console.log(`✅ Results for ${session.session_name}:`, sessionResults?.length || 0);
+        console.log(` Results for ${session.session_name}:`, sessionResults?.length || 0);
         
         return {
           sessionName: session.session_name,
           results: sessionResults || []
         };
       } catch (error) {
-        console.log(`❌ Failed to fetch results for ${session.session_name}:`, error);
+        console.log(` Failed to fetch results for ${session.session_name}:`, error);
         return {
           sessionName: session.session_name,
           results: []

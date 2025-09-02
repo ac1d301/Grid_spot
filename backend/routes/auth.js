@@ -24,7 +24,7 @@ const validatePassword = (password) => {
 // Register endpoint with enhanced validation
 router.post('/register', async (req, res) => {
   try {
-    console.log('📨 Registration request received:', { 
+    console.log(' Registration request received:', { 
       username: req.body.username, 
       email: req.body.email,
       passwordLength: req.body.password?.length 
@@ -123,7 +123,7 @@ router.post('/register', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    console.log('✅ User registered successfully:', user.username);
+    console.log(' User registered successfully:', user.username);
 
     res.status(201).json({
       success: true,
@@ -166,7 +166,7 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body; // This can be username or email
     
-    console.log('📨 Login request received for:', email);
+    console.log(' Login request received for:', email);
 
     // Validate required fields
     if (!email || !password) {
@@ -241,7 +241,7 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    console.log('✅ User logged in successfully:', user.username);
+    console.log(' User logged in successfully:', user.username);
 
     res.json({
       success: true,
@@ -310,7 +310,7 @@ router.post('/logout', auth, async (req, res) => {
     // If you implement token blacklisting, add the token to blacklist here
     // For now, just return success (client should remove token)
     
-    console.log('✅ User logged out:', req.user.username);
+    console.log(' User logged out:', req.user.username);
     
     res.json({
       success: true,
@@ -370,7 +370,7 @@ router.put('/change-password', auth, async (req, res) => {
     user.password = newPassword;
     await user.save();
 
-    console.log('✅ Password changed successfully for user:', user.username);
+    console.log(' Password changed successfully for user:', user.username);
 
     res.json({
       success: true,

@@ -81,6 +81,10 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get("/", (req, res) => {
+  res.status(200).send("Server is alive");
+});
+
 // Global error handling
 app.use((err, req, res, next) => {
   console.error('Global error:', err.stack);

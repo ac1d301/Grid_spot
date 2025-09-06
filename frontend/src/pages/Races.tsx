@@ -75,10 +75,26 @@ const NextRaceHighlight = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Convert UTC to IST
+  // FIXED: Proper UTC to IST conversion
   const convertToIST = (utcDateString: string) => {
     const utcDate = new Date(utcDateString);
-    return new Date(utcDate.getTime() + (5.5 * 60 * 60 * 1000));
+    // Use proper timezone conversion to IST (Asia/Kolkata)
+    return new Date(utcDate.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+  };
+
+  // FIXED: Alternative IST conversion method for display
+  const formatInIST = (utcDateString: string) => {
+    const utcDate = new Date(utcDateString);
+    return utcDate.toLocaleString("en-US", {
+      timeZone: "Asia/Kolkata",
+      hour12: true,
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   // Calculate time remaining or time since
@@ -104,7 +120,7 @@ const NextRaceHighlight = () => {
     }
   };
 
-  // Determine race status based on sessions - UPDATED LOGIC with Red Theme
+  // FIXED: Improved race status determination logic - using IST consistently
   const determineRaceStatus = (sessionsList: OpenF1Session[]): RaceStatus => {
     if (!sessionsList.length) {
       return {
@@ -114,17 +130,17 @@ const NextRaceHighlight = () => {
       };
     }
 
-    const now = new Date();
+    const nowIST = new Date();
     const sortedSessions = [...sessionsList].sort((a, b) => 
-      new Date(a.date_start).getTime() - new Date(b.date_start).getTime()
+      convertToIST(a.date_start).getTime() - convertToIST(b.date_start).getTime()
     );
     
-    const firstSession = sortedSessions[0];
     const raceSession = sessionsList.find(s => s.session_name === 'Race');
     
     if (!raceSession) {
-      // If all sessions are in the past
-      if (sessionsList.every(s => new Date(s.date_end) < now)) {
+      // If all sessions are in the past (using IST)
+      const allSessionsCompleted = sessionsList.every(s => convertToIST(s.date_end) < nowIST);
+      if (allSessionsCompleted) {
         return {
           status: 'completed',
           title: 'LAST RACE',
@@ -134,16 +150,19 @@ const NextRaceHighlight = () => {
       return { status: 'upcoming', title: 'NEXT RACE' };
     }
 
-    const raceStart = new Date(raceSession.date_start);
-    const raceEnd = new Date(raceSession.date_end);
-    const weekendStart = new Date(firstSession.date_start);
-    const weekendEnd = new Date(raceEnd.getTime() + (2 * 60 * 60 * 1000)); // 2 hours after race end
+    const raceStartIST = convertToIST(raceSession.date_start);
+    const raceEndIST = convertToIST(raceSession.date_end);
+    const firstSession = sortedSessions[0];
+    const weekendStartIST = convertToIST(firstSession.date_start);
+    
+    // Extend weekend end to 4 hours after race end for better detection
+    const weekendEndIST = new Date(raceEndIST.getTime() + (4 * 60 * 60 * 1000));
 
-    // Check if any session is currently live
+    // Check if any session is currently live (using IST)
     const liveSession = sessionsList.find(session => {
-      const sessionStart = new Date(session.date_start);
-      const sessionEnd = new Date(session.date_end);
-      return now >= sessionStart && now <= sessionEnd;
+      const sessionStartIST = convertToIST(session.date_start);
+      const sessionEndIST = convertToIST(session.date_end);
+      return nowIST >= sessionStartIST && nowIST <= sessionEndIST;
     });
 
     if (liveSession) {
@@ -154,8 +173,18 @@ const NextRaceHighlight = () => {
       };
     }
 
-    // Check if race weekend is in progress
-    if (now >= weekendStart && now <= weekendEnd) {
+    // FIXED: Better race weekend detection using IST
+    // Check if we're within the race weekend period (from first session start to 4 hours after race end)
+    if (nowIST >= weekendStartIST && nowIST <= weekendEndIST) {
+      // If race has finished but we're still within weekend period
+      if (nowIST > raceEndIST) {
+        return {
+          status: 'just_finished',
+          title: 'RACE FINISHED',
+          badge: { text: 'JUST FINISHED', class: 'bg-red-700 text-white' }
+        };
+      }
+      
       return {
         status: 'this_weekend',
         title: 'THIS WEEKEND',
@@ -163,19 +192,18 @@ const NextRaceHighlight = () => {
       };
     }
 
-    // Check if race just finished (within last 7 days)
-    const daysSinceRace = (now.getTime() - raceEnd.getTime()) / (1000 * 60 * 60 * 24);
-    if (now > raceEnd && daysSinceRace <= 7) {
-      return {
-        status: 'just_finished',
-        title: 'LAST RACE',
-        badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' }
-      };
-    }
-
-    // Check if race is completed
-    if (now > raceEnd) {
-      return {
+    // FIXED: Improved completed race detection using IST
+      // If race has ended and we're past the weekend period
+      if (nowIST > raceEndIST) {
+        // Check if race finished within last 24 hours for "just finished" status (using IST)
+        const hoursSinceRace = (nowIST.getTime() - raceEndIST.getTime()) / (1000 * 60 * 60);
+        if (hoursSinceRace <= 24) {
+          return {
+            status: 'just_finished',
+            title: 'RACE JUST FINISHED',
+            badge: { text: 'JUST FINISHED', class: 'bg-red-700 text-white animate-pulse' }
+          };
+        }      return {
         status: 'completed',
         title: 'LAST RACE',
         badge: { text: 'COMPLETED', class: 'bg-red-800 text-white' }
@@ -189,15 +217,15 @@ const NextRaceHighlight = () => {
     };
   };
 
-  // Get session status
+  // FIXED: Improved session status detection using IST consistently
   const getSessionStatus = (session: OpenF1Session) => {
-    const now = new Date();
-    const sessionStart = convertToIST(session.date_start);
-    const sessionEnd = convertToIST(session.date_end);
+    const nowIST = new Date();
+    const sessionStartIST = convertToIST(session.date_start);
+    const sessionEndIST = convertToIST(session.date_end);
 
-    if (now > sessionEnd) {
+    if (nowIST > sessionEndIST) {
       return 'completed';
-    } else if (now >= sessionStart && now <= sessionEnd) {
+    } else if (nowIST >= sessionStartIST && nowIST <= sessionEndIST) {
       return 'live';
     } else {
       return 'upcoming';
@@ -233,10 +261,10 @@ const NextRaceHighlight = () => {
     if (!isRefresh) setLoading(true);
     else setIsRefreshing(true);
     
-    console.log(' Starting F1 data fetch...');
+    console.log('Starting F1 data fetch...');
 
     try {
-      console.log(' Attempting OpenF1 API calls...');
+      console.log('Attempting OpenF1 API calls...');
       
       // Prioritize 2025 data, then fall back to latest
       const apiUrls = [
@@ -249,16 +277,16 @@ const NextRaceHighlight = () => {
       
       for (let i = 0; i < apiUrls.length; i++) {
         try {
-          console.log(` Trying API ${i + 1}: ${apiUrls[i]}`);
+          console.log(`Trying API ${i + 1}: ${apiUrls[i]}`);
           const response = await fetch(apiUrls[i]);
           
           if (!response.ok) {
-            console.log(` API ${i + 1} failed with status:`, response.status);
+            console.log(`API ${i + 1} failed with status:`, response.status);
             continue;
           }
           
           const data = await response.json();
-          console.log(` API ${i + 1} returned:`, data?.length || 0, 'sessions');
+          console.log(`API ${i + 1} returned:`, data?.length || 0, 'sessions');
           
           if (data && Array.isArray(data) && data.length > 0) {
             allSessions = data;
@@ -266,7 +294,7 @@ const NextRaceHighlight = () => {
             break;
           }
         } catch (err) {
-          console.log(` API ${i + 1} error:`, err);
+          console.log(`API ${i + 1} error:`, err);
           continue;
         }
       }
@@ -299,33 +327,59 @@ const NextRaceHighlight = () => {
           meeting_key: key,
           sessions: sortedSessions,
           firstSessionDate: new Date(sortedSessions[0].date_start),
-          raceDate: new Date(sortedSessions.find(s => s.session_name === 'Race')?.date_start || sortedSessions[0].date_start)
+          raceDate: new Date(sortedSessions.find(s => s.session_name === 'Race')?.date_start || sortedSessions[0].date_start),
+          raceEndDate: new Date(sortedSessions.find(s => s.session_name === 'Race')?.date_end || sortedSessions[0].date_end)
         };
       }).sort((a, b) => a.raceDate.getTime() - b.raceDate.getTime());
 
+      // Get the most recently completed race
+      const completedMeetings = meetings.filter(meeting => meeting.raceEndDate < now);
+      const lastCompletedRace = completedMeetings[completedMeetings.length - 1];
+
       let targetMeeting;
 
-      // Find current race weekend first
+      // Find current race weekend based on end time with extended window
       const currentWeekendMeeting = meetings.find(meeting => {
-        const raceDate = meeting.raceDate;
-        const weekendStart = new Date(raceDate.getTime() - (3 * 24 * 60 * 60 * 1000));
-        const weekendEnd = new Date(raceDate.getTime() + (1 * 24 * 60 * 60 * 1000));
-        return now >= weekendStart && now <= weekendEnd;
+        const raceSession = meeting.sessions.find(s => s.session_name === 'Race');
+        if (!raceSession) return false;
+        
+        const raceEndDate = new Date(raceSession.date_end);
+        // Add 6 hours after race end for post-race coverage
+        const weekendEnd = new Date(raceEndDate.getTime() + (6 * 60 * 60 * 1000));
+        // Start window 12 hours before first session
+        const weekendStart = new Date(meeting.firstSessionDate.getTime() - (12 * 60 * 60 * 1000));
+
+        // Check if first session has started
+        const firstSessionStarted = now >= meeting.firstSessionDate;
+        
+        // If we're in the weekend window but first session hasn't started,
+        // we should show the last completed race instead
+        if (now >= weekendStart && now <= weekendEnd) {
+          return firstSessionStarted;
+        }
+        return false;
       });
 
       if (currentWeekendMeeting) {
         targetMeeting = currentWeekendMeeting;
-        console.log(' Using current race weekend');
+        console.log('Using current race weekend');
       } else {
         // Find next upcoming meeting
-        targetMeeting = meetings.find(meeting => meeting.raceDate > now);
+        const nextMeeting = meetings.find(meeting => meeting.raceDate > now);
         
-        if (!targetMeeting) {
-          // No upcoming meetings, get the most recent completed one
-          targetMeeting = meetings.filter(meeting => meeting.raceDate <= now).pop();
+        if (!nextMeeting) {
+          // No upcoming meetings, use last completed race
+          targetMeeting = lastCompletedRace;
           console.log('Using most recent completed race');
         } else {
-          console.log(' Using next upcoming race');
+          // If the next meeting's first session hasn't started yet, show last completed race
+          if (now < nextMeeting.firstSessionDate && lastCompletedRace) {
+            targetMeeting = lastCompletedRace;
+            console.log('Using most recent completed race (next race session not started)');
+          } else {
+            targetMeeting = nextMeeting;
+            console.log('Using next upcoming race');
+          }
         }
       }
 
@@ -341,10 +395,10 @@ const NextRaceHighlight = () => {
       
       setApiError(null);
       setLastUpdated(new Date());
-      console.log(' Successfully loaded race data for:', targetMeeting.sessions[0]?.country_name);
+      console.log('Successfully loaded race data for:', targetMeeting.sessions[0]?.country_name);
 
     } catch (error) {
-      console.log(' All APIs failed:', error);
+      console.log('All APIs failed:', error);
       setApiError('Unable to load race data');
       setSessions([]);
     } finally {
@@ -357,7 +411,7 @@ const NextRaceHighlight = () => {
   const fetchResults = async (sessionsList: OpenF1Session[]) => {
     if (sessionsList.length === 0) return;
 
-    console.log(' Fetching session results...');
+    console.log('Fetching session results...');
     
     const mainSessions = sessionsList.filter(session => 
       ['Practice 1', 'Practice 2', 'Practice 3', 'Qualifying', 'Race'].includes(session.session_name) ||
@@ -373,19 +427,19 @@ const NextRaceHighlight = () => {
         );
         
         if (!response.ok) {
-          console.log(` No results for ${session.session_name} (${response.status})`);
+          console.log(`No results for ${session.session_name} (${response.status})`);
           return { sessionName: session.session_name, results: [] };
         }
         
         const sessionResults = await response.json();
-        console.log(` Results for ${session.session_name}:`, sessionResults?.length || 0);
+        console.log(`Results for ${session.session_name}:`, sessionResults?.length || 0);
         
         return {
           sessionName: session.session_name,
           results: sessionResults || []
         };
       } catch (error) {
-        console.log(` Failed to fetch results for ${session.session_name}:`, error);
+        console.log(`Failed to fetch results for ${session.session_name}:`, error);
         return {
           sessionName: session.session_name,
           results: []
@@ -442,13 +496,13 @@ const NextRaceHighlight = () => {
     }
   }, [sessions]); // Only depends on sessions
 
-  // Update countdown timers
+  // FIXED: Update countdown timers with proper IST conversion
   useEffect(() => {
     const updateTimers = () => {
       const timers: Record<string, string> = {};
       sessions.forEach(session => {
-        const istDate = convertToIST(session.date_start);
-        timers[session.session_key.toString()] = calculateTimeRemaining(istDate);
+        const sessionStart = new Date(session.date_start);
+        timers[session.session_key.toString()] = calculateTimeRemaining(sessionStart);
       });
       setTimeToSessions(timers);
     };
@@ -460,10 +514,10 @@ const NextRaceHighlight = () => {
     }
   }, [sessions]);
 
-  // Get next upcoming session
+  // FIXED: Get next upcoming session with proper date handling
   const nextSession = sessions
-    .filter(session => convertToIST(session.date_start) > new Date())
-    .sort((a, b) => convertToIST(a.date_start).getTime() - convertToIST(b.date_start).getTime())[0];
+    .filter(session => new Date(session.date_start) > new Date())
+    .sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime())[0];
 
   // Get winner from results
   const getWinner = (sessionName: string) => {
@@ -566,7 +620,7 @@ const NextRaceHighlight = () => {
             
             <div className="flex items-center justify-center gap-6 flex-wrap">
               <p className="text-red-400 text-sm font-semibold">
-                🏁 Round {meetingInfo?.year === 2025 ? '15' : '14'} of 24 • {meetingInfo?.year}
+                Round {meetingInfo?.year === 2025 ? '15' : '14'} of 24 • {meetingInfo?.year}
               </p>
               {lastUpdated && (
                 <div className="flex items-center gap-2 text-xs text-zinc-400">
@@ -601,7 +655,8 @@ const NextRaceHighlight = () => {
               {sessions
                 .sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime())
                 .map((session) => {
-                  const istDate = convertToIST(session.date_start);
+                  const sessionDate = new Date(session.date_start);
+                  const istFormatted = formatInIST(session.date_start);
                   const isNext = nextSession?.session_key === session.session_key;
                   const status = getSessionStatus(session);
                   
@@ -641,7 +696,8 @@ const NextRaceHighlight = () => {
                       </div>
                       
                       <div className="text-sm text-zinc-400 mb-1">
-                        {istDate.toLocaleDateString('en-GB', {
+                        {sessionDate.toLocaleDateString('en-US', {
+                          timeZone: 'Asia/Kolkata',
                           weekday: 'long',
                           day: 'numeric',
                           month: 'long'
@@ -649,7 +705,8 @@ const NextRaceHighlight = () => {
                       </div>
                       
                       <div className="text-lg font-bold mb-2 text-zinc-200">
-                        {istDate.toLocaleTimeString('en-US', {
+                        {sessionDate.toLocaleTimeString('en-US', {
+                          timeZone: 'Asia/Kolkata',
                           hour: '2-digit',
                           minute: '2-digit',
                           hour12: true
@@ -681,11 +738,23 @@ const NextRaceHighlight = () => {
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center py-3 border-b border-zinc-700/30">
-                    <span className="text-sm font-medium text-zinc-300">Practice (Fastest):</span>
+                    <span className="text-sm font-medium text-zinc-300">Practice 1 (Fastest):</span>
                     <span className="font-bold text-zinc-100">
-                      {getWinner('Practice 1') !== '—' ? getWinner('Practice 1') : 
-                       getWinner('Practice 2') !== '—' ? getWinner('Practice 2') : 
-                       getWinner('Practice 3') !== '—' ? getWinner('Practice 3') : '—'}
+                      {getWinner('Practice 1')}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-3 border-b border-zinc-700/30">
+                    <span className="text-sm font-medium text-zinc-300">Practice 2 (Fastest):</span>
+                    <span className="font-bold text-zinc-100">
+                      {getWinner('Practice 2')}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-3 border-b border-zinc-700/30">
+                    <span className="text-sm font-medium text-zinc-300">Practice 3 (Fastest):</span>
+                    <span className="font-bold text-zinc-100">
+                      {getWinner('Practice 3')}
                     </span>
                   </div>
                   

@@ -186,7 +186,8 @@ const RaceCalendar = () => {
       circuit: 'Circuit Park Zandvoort',
       date: '2025-08-29',
       endDate: '2025-08-31',
-      isCompleted: false
+      isCompleted: true,
+      winner: 'Oscar Piastri'
     },
     {
       round: 16,

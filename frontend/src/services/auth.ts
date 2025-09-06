@@ -70,7 +70,7 @@ class AuthService {
 
   async login(email: string, password: string): Promise<User> {
     try {
-      console.log(' Sending login request for:', email);
+      console.log('Sending login request for:', email);
       
       const res = await axios.post(
         `${API_BASE_URL}/auth/login`,
@@ -81,12 +81,12 @@ class AuthService {
         }
       );
       
-      console.log(' Login successful:', res.data);
+      console.log('Login successful:', res.data);
       this.setToken(res.data.token);
       return res.data.user;
       
     } catch (error: any) {
-      console.error(' Login failed:', error);
+      console.error('Login failed:', error);
       
       if (error.response) {
         console.error('Error Status:', error.response.status);
@@ -124,7 +124,7 @@ class AuthService {
       return res.data.user;
       
     } catch (error: any) {
-      console.error(' Failed to get current user:', error);
+      console.error('Failed to get current user:', error);
       
       if (error.response) {
         // Check if token is invalid (401/403)
@@ -145,7 +145,7 @@ class AuthService {
 
   logout() {
     this.clearToken();
-    console.log(' User logged out successfully');
+    console.log('User logged out successfully');
   }
 
   isAuthenticated(): boolean {

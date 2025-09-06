@@ -411,7 +411,7 @@ const NextRaceHighlight = () => {
   const fetchResults = async (sessionsList: OpenF1Session[]) => {
     if (sessionsList.length === 0) return;
 
-    console.log('Fetching session results...');
+                    console.log('Fetching session results...');
     
     const mainSessions = sessionsList.filter(session => 
       ['Practice 1', 'Practice 2', 'Practice 3', 'Qualifying', 'Race'].includes(session.session_name) ||

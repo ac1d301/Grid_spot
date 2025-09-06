@@ -44,7 +44,6 @@ const Home = () => {
   const [timeToNextRace, setTimeToNextRace] = useState<string>('');
   const [nextRace, setNextRace] = useState<Race | undefined>(undefined);
   const [currentRace, setCurrentRace] = useState<Race | undefined>(undefined);
-  const [lastRace, setLastRace] = useState<Race | undefined>(undefined);
   const [races, setRaces] = useState<Race[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -160,7 +159,67 @@ const Home = () => {
     'British Grand Prix': 'Lando Norris',
     'Belgian Grand Prix': 'Oscar Piastri',
     'Hungarian Grand Prix': 'Lando Norris',
-    'Dutch Grand Prix': 'Oscar Piastri'
+    'Dutch Grand Prix': 'Oscar Piastri',
+  };
+
+  // FIXED: Proper UTC to IST conversion (same as Races.tsx)
+  const convertToIST = (utcDateString: string) => {
+    const utcDate = new Date(utcDateString);
+    // Use proper timezone conversion to IST (Asia/Kolkata)
+    return new Date(utcDate.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+  };
+
+  // FIXED: Race status determination using IST (same logic as Races.tsx)
+  const determineRaceStatus = (sessionsList: OpenF1Session[]): { isCompleted: boolean, isOngoing: boolean } => {
+    if (!sessionsList.length) {
+      return { isCompleted: false, isOngoing: false };
+    }
+
+    const nowIST = new Date();
+    const sortedSessions = [...sessionsList].sort((a, b) => 
+      convertToIST(a.date_start).getTime() - convertToIST(b.date_start).getTime()
+    );
+    
+    const raceSession = sessionsList.find(s => s.session_name === 'Race');
+    const firstSession = sortedSessions[0];
+    const lastSession = sortedSessions[sortedSessions.length - 1];
+    
+    const weekendStartIST = convertToIST(firstSession.date_start);
+    const weekendEndIST = convertToIST(lastSession.date_end);
+    
+    // Extend weekend end to 4 hours after race end for better detection
+    const extendedWeekendEndIST = new Date(weekendEndIST.getTime() + (4 * 60 * 60 * 1000));
+
+    // Check if any session is currently live (using IST)
+    const liveSession = sessionsList.find(session => {
+      const sessionStartIST = convertToIST(session.date_start);
+      const sessionEndIST = convertToIST(session.date_end);
+      return nowIST >= sessionStartIST && nowIST <= sessionEndIST;
+    });
+
+    if (liveSession) {
+      return { isCompleted: false, isOngoing: true };
+    }
+
+    // FIXED: Better race weekend detection using IST
+    // Check if we're within the race weekend period (from first session start to 4 hours after race end)
+    if (nowIST >= weekendStartIST && nowIST <= extendedWeekendEndIST) {
+      // If race has finished but we're still within weekend period
+      if (raceSession && nowIST > convertToIST(raceSession.date_end)) {
+        return { isCompleted: false, isOngoing: true }; // Still in post-race coverage
+      }
+      
+      return { isCompleted: false, isOngoing: true };
+    }
+
+    // FIXED: Improved completed race detection using IST
+    // If race has ended and we're past the extended weekend period
+    if (nowIST > extendedWeekendEndIST) {
+      return { isCompleted: true, isOngoing: false };
+    }
+
+    // Default to upcoming race
+    return { isCompleted: false, isOngoing: false };
   };
 
   // Transform OpenF1 sessions to Race objects with accurate winners and status
@@ -191,31 +250,11 @@ const Home = () => {
 
       const firstSession = sortedSessions[0];
       const lastSession = sortedSessions[sortedSessions.length - 1];
-      const raceSession = sessionsList.find(s => s.session_name === 'Race');
       
-      // FIXED: Race status based on weekend END date, not start date
-      const now = new Date();
-      const weekendStart = new Date(firstSession.date_start);
-      const weekendEnd = new Date(lastSession.date_end);
-      
-      let isCompleted = false;
-      let isOngoing = false;
-      
-      // Race is completed only after the entire weekend ends
-      if (now > weekendEnd) {
-        isCompleted = true;
-        isOngoing = false;
-      } 
-      // Race is ongoing if we're within the weekend period
-      else if (now >= weekendStart && now <= weekendEnd) {
-        isCompleted = false;
-        isOngoing = true;
-      } 
-      // Race is upcoming if weekend hasn't started yet
-      else {
-        isCompleted = false;
-        isOngoing = false;
-      }
+      // FIXED: Use IST-based race status determination
+      const raceStatus = determineRaceStatus(sessionsList);
+      const isCompleted = raceStatus.isCompleted;
+      const isOngoing = raceStatus.isOngoing;
 
       // Check if it's a sprint weekend
       const isSprint = sessionsList.some(s => s.session_name.toLowerCase().includes('sprint'));
@@ -247,21 +286,22 @@ const Home = () => {
     // Combine dynamic past races with static future races
     const allRaces = [...dynamicRaces];
     
-    // Add static future races with proper round numbers
+    // Add static future races with proper round numbers and status
     let nextRoundNumber = dynamicRaces.length + 1;
     FUTURE_RACES_STATIC.forEach(futureRace => {
-      const now = new Date();
-      const weekendStart = new Date(futureRace.date);
-      const weekendEnd = new Date(futureRace.endDate);
+      const nowIST = new Date();
+      const weekendStartIST = convertToIST(futureRace.date + 'T00:00:00Z');
+      const weekendEndIST = convertToIST(futureRace.endDate + 'T23:59:59Z');
+      const extendedWeekendEndIST = new Date(weekendEndIST.getTime() + (4 * 60 * 60 * 1000));
       
       let isCompleted = false;
       let isOngoing = false;
       
-      // Apply same logic to static races
-      if (now > weekendEnd) {
+      // Apply same IST logic to static races
+      if (nowIST > extendedWeekendEndIST) {
         isCompleted = true;
         isOngoing = false;
-      } else if (now >= weekendStart && now <= weekendEnd) {
+      } else if (nowIST >= weekendStartIST && nowIST <= extendedWeekendEndIST) {
         isCompleted = false;
         isOngoing = true;
       } else {
@@ -286,7 +326,7 @@ const Home = () => {
     setError(null);
     
     try {
-      console.log('🏁 Fetching 2025 race data from OpenF1 API...');
+      console.log('Fetching 2025 race data from OpenF1 API...');
       
       // Fetch all 2025 sessions
       const sessionsResponse = await fetch('https://api.openf1.org/v1/sessions?year=2025');
@@ -303,16 +343,16 @@ const Home = () => {
         return;
       }
 
-      console.log(`✅ Fetched ${sessionsData.length} sessions from API`);
+      console.log(`Fetched ${sessionsData.length} sessions from API`);
       
       // Transform sessions to races and combine with static future races
       const raceCalendar = transformSessionsToRaces(sessionsData);
       
-      console.log(`🏎️ Combined calendar: ${raceCalendar.length} total races`);
+      console.log(`Combined calendar: ${raceCalendar.length} total races`);
       setRaces(raceCalendar);
       
     } catch (error) {
-      console.error('💥 Failed to fetch race calendar:', error);
+      console.error('Failed to fetch race calendar:', error);
       console.log('Using static future races as fallback');
       setRaces(FUTURE_RACES_STATIC);
     } finally {
@@ -320,44 +360,18 @@ const Home = () => {
     }
   };
 
-  // FIXED: Get current ongoing race (weekend is in progress)
+  // FIXED: Get current ongoing race using IST-based logic
   const getCurrentRace = (raceList: Race[]): Race | undefined => {
-    const now = new Date();
-    return raceList.find(race => {
-      const weekendStart = new Date(race.date);
-      const weekendEnd = new Date(race.endDate);
-      return race.isOngoing && now >= weekendStart && now <= weekendEnd;
-    });
+    return raceList.find(race => race.isOngoing);
   };
 
-  // FIXED: Get next upcoming race (weekend hasn't started yet)
+  // FIXED: Get next upcoming race using IST-based logic
   const getNextRace = (raceList: Race[]): Race | undefined => {
-    const now = new Date();
+    const nowIST = new Date();
     return raceList
-      .filter(race => {
-        const weekendStart = new Date(race.date);
-        return !race.isCompleted && !race.isOngoing && now < weekendStart;
-      })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
-  };
-
-  // FIXED: Get last completed race (only races where weekend has completely ended)
-  const getLastRace = (raceList: Race[]): Race | undefined => {
-    const now = new Date();
-    const lastCompleted = [...raceList]
-      .filter(race => {
-        // Double check: race is completed AND weekend end date has passed
-        const weekendEnd = new Date(race.endDate);
-        return race.isCompleted && now > weekendEnd;
-      })
-      .sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())[0];
-    
-    // Ensure winner is properly set from static data
-    if (lastCompleted && lastCompleted.winner) {
-      return lastCompleted;
-    }
-    
-    return lastCompleted;
+      .filter(race => !race.isCompleted && !race.isOngoing)
+      .filter(race => convertToIST(race.date + 'T00:00:00Z') > nowIST)
+      .sort((a, b) => convertToIST(a.date + 'T00:00:00Z').getTime() - convertToIST(b.date + 'T00:00:00Z').getTime())[0];
   };
 
   // Update race states when races data changes
@@ -365,17 +379,13 @@ const Home = () => {
     if (races.length > 0) {
       const currentRaceData = getCurrentRace(races);
       const nextRaceData = getNextRace(races);
-      const lastRaceData = getLastRace(races);
       
       setCurrentRace(currentRaceData);
       setNextRace(nextRaceData);
-      setLastRace(lastRaceData);
       
-      console.log('📊 Updated race states:', {
+      console.log('Updated race states:', {
         current: currentRaceData?.name,
         next: nextRaceData?.name,
-        last: lastRaceData?.name,
-        lastWinner: lastRaceData?.winner
       });
     }
   }, [races]);
@@ -476,18 +486,18 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Race Information Section */}
+      {/* Race Information Section - SIMPLIFIED TO TWO CARDS */}
       <section className="py-16 bg-background">
         <div className="container mx-auto px-4">
           <div className="grid lg:grid-cols-2 gap-8">
             
-            {/* Current/Next Race Card */}
+            {/* LEFT: Current/Next Race Card */}
             {currentRace ? (
-              // Current Race Card (Ongoing)
-              <Card className="bg-gradient-to-r from-red-800/90 to-red-900/90 backdrop-blur-md text-white border-red-600/50 shadow-2xl animate-pulse">
+              // Current Race Card (Ongoing) - NO BLINKING
+              <Card className="bg-gradient-to-r from-red-800/90 to-red-900/90 backdrop-blur-md text-white border-red-600/50 shadow-2xl">
                 <CardHeader className="text-center pb-4">
                   <div className="flex items-center justify-center gap-2 mb-2">
-                    <Play className="h-6 w-6 text-red-300 animate-pulse" />
+                    <Play className="h-6 w-6 text-red-300" />
                     <CardTitle className="text-2xl font-bold text-red-100">RACE WEEKEND LIVE</CardTitle>
                   </div>
                   <div className="text-3xl font-bold mb-2 text-red-100">
@@ -503,7 +513,7 @@ const Home = () => {
                     <div className="bg-white/10 backdrop-blur-sm border border-red-400/30 rounded-lg p-3">
                       <div className="flex items-center justify-between">
                         <span className="text-red-200 text-sm">Status</span>
-                        <Badge className="bg-red-600 text-white text-xs animate-pulse">
+                        <Badge className="bg-red-600 text-white text-xs">
                           LIVE NOW
                         </Badge>
                       </div>
@@ -630,56 +640,54 @@ const Home = () => {
               </Card>
             )}
 
-            {/* Last Race Card - FIXED: Back to red theme and proper winner display */}
-            {lastRace ? (
-              <Card className="bg-gradient-to-r from-red-900/80 to-red-800/80 backdrop-blur-md text-white border-red-600/50 shadow-2xl">
+            {/* RIGHT: Next Race Card (Always shown) */}
+            {nextRace ? (
+              <Card className="bg-gradient-to-r from-gray-800/90 to-gray-900/90 backdrop-blur-md text-white border-gray-600/50 shadow-2xl">
                 <CardHeader className="text-center pb-4">
                   <div className="flex items-center justify-center gap-2 mb-2">
-                    <CheckCircle className="h-6 w-6 text-red-300" />
-                    <CardTitle className="text-2xl font-bold text-red-100">LAST RACE</CardTitle>
+                    <Flag className="h-6 w-6 text-gray-300" />
+                    <CardTitle className="text-2xl font-bold text-gray-100">NEXT RACE</CardTitle>
                   </div>
-                  <div className="text-3xl font-bold mb-2 text-red-100">
-                    {lastRace.name}
+                  <div className="text-3xl font-bold mb-2 text-gray-100">
+                    {nextRace.name}
                   </div>
-                  <p className="text-lg opacity-90 flex items-center justify-center gap-2 text-red-200">
+                  <p className="text-lg opacity-90 flex items-center justify-center gap-2 text-gray-200">
                     <MapPin className="h-4 w-4" />
-                    {lastRace.location}, {lastRace.country}
+                    {nextRace.location}, {nextRace.country}
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 gap-3">
                     <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-red-300 text-sm">Race Date</span>
+                        <span className="text-gray-300 text-sm">Race Weekend</span>
                         <span className="font-bold text-white">
-                          {new Date(lastRace.date).toLocaleDateString('en-US', {
-                            month: 'long',
-                            day: 'numeric',
-                            year: 'numeric'
+                          {new Date(nextRace.date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric'
+                          })} - {new Date(nextRace.endDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric'
                           })}
                         </span>
                       </div>
                     </div>
                     
-                    {/* FIXED: Winner display with proper check */}
                     <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-red-300 text-sm">Winner</span>
-                        <span className="font-bold text-yellow-400 flex items-center gap-1">
-                          <Trophy className="h-4 w-4" />
-                          {lastRace.winner || 'Oscar Piastri'}
-                        </span>
+                        <span className="text-gray-300 text-sm">Time Remaining</span>
+                        <span className="font-bold text-red-400">{timeToNextRace}</span>
                       </div>
                     </div>
 
                     <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-red-300 text-sm">Round</span>
-                        <span className="font-bold text-white">{lastRace.round} of {races.length}</span>
+                        <span className="text-gray-300 text-sm">Circuit</span>
+                        <span className="font-bold text-white text-sm">{nextRace.circuit}</span>
                       </div>
                     </div>
 
-                    {lastRace.isSprint && (
+                    {nextRace.isSprint && (
                       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-3">
                         <div className="flex items-center justify-center">
                           <Badge className="bg-orange-600 text-white text-xs">
@@ -689,14 +697,23 @@ const Home = () => {
                       </div>
                     )}
                   </div>
+
+                  <div className="text-center">
+                    <Link to="/race-calendar">
+                      <Button className="w-full bg-red-600 hover:bg-red-700">
+                        View Full Calendar
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
             ) : (
-              <Card className="bg-gradient-to-r from-red-900/80 to-red-800/80 backdrop-blur-md text-white border-red-600/50 shadow-2xl">
+              <Card className="bg-gradient-to-r from-gray-800/90 to-gray-900/90 backdrop-blur-md text-white border-gray-600/50 shadow-2xl">
                 <CardContent className="text-center py-16">
-                  <CheckCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-bold text-red-300 mb-2">Season Starting Soon</h3>
-                  <p className="text-red-400">No completed races yet</p>
+                  <Flag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-gray-300 mb-2">Season Complete</h3>
+                  <p className="text-gray-400">All races finished for 2025</p>
                 </CardContent>
               </Card>
             )}

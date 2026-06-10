@@ -17,40 +17,54 @@ const fail = (res, code, msg, err) =>
   });
 
 router.get('/calendar', async (req, res) => {
+  let year = null;
   try {
-    const year = await resolveYear(req.query.year);
+    year = await resolveYear(req.query.year);
     res.json(await buildCalendar(year));
   } catch (e) {
-    fail(res, 502, 'Failed to build calendar', e);
+    // The calendar is called on every page; never 502 it. Degrade to an empty-but-valid shape
+    // (the frontend uses `data?.races ?? []`) and let the client self-heal once the warm lands.
+    if (process.env.NODE_ENV === 'development') console.warn('calendar degraded:', e.message);
+    res.set('Cache-Control', 'public, max-age=15');
+    res.json({ season: year ?? new Date().getUTCFullYear(), totalRounds: 0, races: [], degraded: true });
   }
 });
 
 router.get('/standings/drivers', async (req, res) => {
+  let year = null;
   try {
-    const year = await resolveYear(req.query.year);
+    year = await resolveYear(req.query.year);
     const withCareer = req.query.career === '1' || req.query.career === 'true';
     const data = withCareer
       ? await standings.driverStandingsWithCareer(year)
       : await standings.driverStandings(year);
     res.json({ season: year, standings: data });
   } catch (e) {
-    fail(res, 502, 'Failed to build driver standings', e);
+    // Degrade gracefully on a cold-cache/upstream blip (Jolpica rate-limit) instead of 502:
+    // return an empty list (200) so the client shows a clean state and self-heals on its next
+    // poll once the warm cache lands. Short cache so a CDN doesn't pin the empty result.
+    if (process.env.NODE_ENV === 'development') console.warn('driver standings degraded:', e.message);
+    res.set('Cache-Control', 'public, max-age=15');
+    res.json({ season: year, standings: [], degraded: true });
   }
 });
 
 router.get('/standings/constructors', async (req, res) => {
+  let year = null;
   try {
-    const year = await resolveYear(req.query.year);
+    year = await resolveYear(req.query.year);
     res.json({ season: year, standings: await standings.constructorStandings(year) });
   } catch (e) {
-    fail(res, 502, 'Failed to build constructor standings', e);
+    if (process.env.NODE_ENV === 'development') console.warn('constructor standings degraded:', e.message);
+    res.set('Cache-Control', 'public, max-age=15');
+    res.json({ season: year, standings: [], degraded: true });
   }
 });
 
 router.get('/drivers/:driverNumber/career', async (req, res) => {
+  const num = parseInt(req.params.driverNumber, 10);
   try {
     const year = await resolveYear(req.query.year);
-    const num = parseInt(req.params.driverNumber, 10);
     const list = await standings.driverStandings(year);
     const match = list.find((d) => d.driver_number === num);
     if (!match?.driverId) return fail(res, 404, 'Driver not found for season', null);
@@ -64,7 +78,10 @@ router.get('/drivers/:driverNumber/career', async (req, res) => {
       ...career,
     });
   } catch (e) {
-    fail(res, 502, 'Failed to fetch career stats', e);
+    // Degrade to zeroed career rather than 502 on a cold-cache/Jolpica blip.
+    if (process.env.NODE_ENV === 'development') console.warn('career degraded:', e.message);
+    res.set('Cache-Control', 'public, max-age=15');
+    res.json({ driver_number: num, careerWins: 0, careerPodiums: 0, careerPoles: 0, degraded: true });
   }
 });
 

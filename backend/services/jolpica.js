@@ -9,7 +9,7 @@ const T = require('../config/cacheTtls');
 const BASE = process.env.JOLPICA_BASE || 'https://api.jolpi.ca/ergast/f1';
 const http = axios.create({
   baseURL: BASE,
-  timeout: 10000,
+  timeout: 12000, // a bit generous: datacenter -> Jolpica latency is higher than from home
   headers: { Accept: 'application/json' },
 });
 
@@ -61,23 +61,30 @@ async function pump() {
 // Retries up to twice on 429/503 with backoff so a cold sweep that grazes the rate
 // limit recovers instead of failing (and caching zeros).
 function getJson(path, ttl = T.STANDINGS, opts = {}) {
-  return cachedFetch(`jolpica:${path}`, ttl, async () =>
-    schedule(async () => {
-      let lastErr;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const res = await http.get(`${path}.json`, { params: { limit: 100 } });
-          return res.data;
-        } catch (err) {
-          lastErr = err;
-          const status = err.response?.status;
-          if (status !== 429 && status !== 503) throw err;
-          await sleep(800 * (attempt + 1));
-        }
+  return cachedFetch(`jolpica:${path}`, ttl, async () => {
+    // One throttled attempt. The retry BACKOFF happens OUTSIDE schedule() so a retrying call
+    // doesn't hold the single serialized queue slot (which would block higher-priority
+    // on-demand requests behind it); each retry simply re-queues by priority.
+    const attemptOnce = () =>
+      schedule(() => http.get(`${path}.json`, { params: { limit: 100 } }).then((r) => r.data), {
+        priority: opts.priority,
+      });
+    let lastErr;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await attemptOnce();
+      } catch (err) {
+        lastErr = err;
+        const status = err.response?.status;
+        // Retry rate-limits, transient 5xx AND network timeouts (common from a datacenter on a
+        // cold cache) — otherwise a single slow Jolpica call would 502 the whole endpoint.
+        const timedOut = !status && (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT');
+        if (status !== 429 && status !== 503 && !(status >= 500) && !timedOut) throw err;
+        await sleep(800 * (attempt + 1));
       }
-      throw lastErr;
-    }, { priority: opts.priority })
-  );
+    }
+    throw lastErr;
+  });
 }
 
 async function driverStandings(year) {

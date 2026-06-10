@@ -33,12 +33,13 @@ const STATIC = { staleTime: 24 * 60 * 60_000, gcTime: 60 * 60_000 } as const;
 
 export function useCalendar(year = currentSeason()) {
   // Schedule is near-static; winners settle hours after a race. Live freshness is handled
-  // separately by useLiveCalendar, so this can cache hard and skip background polling.
+  // separately by useLiveCalendar, so this caches hard — but self-heal if the backend
+  // briefly degraded the calendar to empty during a cold start.
   return useQuery({
     queryKey: qk.calendar(year),
     queryFn: () => f1Api.getCalendar(year),
     staleTime: 60 * 60_000,
-    refetchInterval: false,
+    refetchInterval: (q) => (!q.state.data?.races?.length && q.state.dataUpdateCount < 6 ? 10_000 : false),
   });
 }
 
@@ -51,11 +52,21 @@ export function useLiveCalendar(year = currentSeason()) {
     staleTime: 60_000,
     refetchInterval: (query) => {
       const data = query.state.data;
+      // Self-heal a cold-start degraded (empty) calendar, then fall back to live/idle cadence.
+      if (!data?.races?.length && query.state.dataUpdateCount < 6) return 10_000;
       const anyLive = data?.races?.some((r) => getRaceStatus(r.sessions) === 'live');
       return anyLive ? 60_000 : 30 * 60_000;
     },
   });
 }
+
+// While the list is empty (e.g. the backend briefly degraded standings to [] during a cold
+// start), poll so it self-heals once the cache warms; stop once we have data OR after a few
+// tries (so a *legitimately* empty list — e.g. pre-season — doesn't poll forever).
+const refetchWhileEmpty =
+  <T,>(ms = 10_000, maxPolls = 6) =>
+  (query: { state: { data?: T[]; dataUpdateCount: number } }) =>
+    !(Array.isArray(query.state.data) && query.state.data.length) && query.state.dataUpdateCount < maxPolls ? ms : false;
 
 export function useDriverStandings(year = currentSeason(), career = false) {
   // Standings only change after a race. Cache for 5min; don't background-poll (a refetch
@@ -64,6 +75,7 @@ export function useDriverStandings(year = currentSeason(), career = false) {
     queryKey: [...qk.driverStandings(year), career ? 'career' : 'season'] as const,
     queryFn: () => f1Api.getDriverStandings(year, { career }),
     staleTime: 5 * 60_000,
+    refetchInterval: refetchWhileEmpty(),
   });
 }
 
@@ -72,6 +84,7 @@ export function useConstructorStandings(year = currentSeason()) {
     queryKey: qk.constructorStandings(year),
     queryFn: () => f1Api.getConstructorStandings(year),
     staleTime: 5 * 60_000,
+    refetchInterval: refetchWhileEmpty(),
   });
 }
 

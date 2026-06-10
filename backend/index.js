@@ -189,19 +189,39 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // career sweep makes ~88 throttled Jolpica calls (~25s) on a cold cache; doing it here
 // means real users always hit warm caches instead of waiting. Fire-and-forget.
 async function warmF1Cache() {
-  try {
-    const { getCurrentSeason } = require('./services/season');
-    const { buildCalendar } = require('./services/calendar');
-    const standings = require('./services/standings');
-    const year = await getCurrentSeason();
-    await buildCalendar(year).catch(() => {});
-    // LOW priority: the career sweep must yield to on-demand profile/standings requests.
-    await standings.driverStandingsWithCareer(year, { priority: 'low' }).catch(() => {});
-    await standings.constructorStandings(year).catch(() => {});
-    console.log(` F1 cache warmed for season ${year}`);
-  } catch (err) {
-    console.warn(' F1 cache warm skipped:', err.message);
-  }
+  const { getCurrentSeason } = require('./services/season');
+  const { buildCalendar } = require('./services/calendar');
+  const standings = require('./services/standings');
+  const { getNews } = require('./services/news');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Retry a warm step a few times so a transient upstream blip on a cold cache doesn't leave
+  // the value uncached (which is what makes an endpoint serve an empty/degraded response).
+  // Logs on exhaustion so a *permanent* failure (e.g. Jolpica blocking the IP) is visible.
+  const warmRetry = async (label, fn, attempts = 4) => {
+    for (let i = 0; i < attempts; i++) {
+      try { await fn(); return true; } catch (e) { if (i === attempts - 1) console.warn(` warm "${label}" failed: ${e.message}`); await sleep(2500); }
+    }
+    return false;
+  };
+
+  // Season detection is itself an upstream call — retry it (and fall back to the calendar year)
+  // so a single blip doesn't skip the ENTIRE warm and leave every endpoint cold.
+  let year;
+  await warmRetry('season', async () => { year = await getCurrentSeason(); });
+  if (!year) year = new Date().getUTCFullYear();
+
+  // Warm the cheap, high-traffic, first-load endpoints up front so they're cached within
+  // seconds — these are the ones that would otherwise 502/degrade in the cold-start window.
+  await warmRetry('calendar', () => buildCalendar(year));
+  await warmRetry('driverStandings', () => standings.driverStandings(year));
+  await warmRetry('constructorStandings', () => standings.constructorStandings(year));
+  await warmRetry('news', () => getNews('trending'));
+  console.log(` F1 cache warmed for season ${year}`);
+
+  // Heavy per-driver career sweep LAST, in the background at LOW priority so it never blocks
+  // on-demand requests or the success above.
+  standings.driverStandingsWithCareer(year, { priority: 'low' }).catch(() => {});
 }
 
 module.exports = app;

@@ -1,12 +1,34 @@
 const express = require('express');
 const router = express.Router();
 const { ForumThread, Comment } = require('../models/forum');
+const { broadcastToThread } = require('../websocket');
+
+const CATEGORIES = ['General', 'Race Discussion', 'Technical', 'News', 'Off-Topic'];
+const TITLE_MAX = 200;
+const CONTENT_MAX = 10000;
+const COMMENT_MAX = 5000;
 
 // Helper function to calculate score with null checks
 const calculateScore = (entity) => {
   const likesCount = entity.likes ? entity.likes.length : 0;
   const dislikesCount = entity.dislikes ? entity.dislikes.length : 0;
   return likesCount - dislikesCount;
+};
+
+// Returns an error string if the thread payload is invalid, else null.
+const validateThread = ({ title, content, category }) => {
+  if (!title || !title.trim()) return 'Title is required';
+  if (title.trim().length > TITLE_MAX) return `Title must be ${TITLE_MAX} characters or fewer`;
+  if (!content || !content.trim()) return 'Content is required';
+  if (content.trim().length > CONTENT_MAX) return `Content must be ${CONTENT_MAX} characters or fewer`;
+  if (!CATEGORIES.includes(category)) return 'Invalid category';
+  return null;
+};
+
+const validateComment = (content) => {
+  if (!content || !content.trim()) return 'Comment cannot be empty';
+  if (content.trim().length > COMMENT_MAX) return `Comment must be ${COMMENT_MAX} characters or fewer`;
+  return null;
 };
 
 // Get all threads with proper like/dislike scoring
@@ -21,6 +43,13 @@ router.get('/threads', async (req, res) => {
     const query = {};
     if (category) query.category = category;
     if (tag) query.tags = tag;
+
+    // Free-text search across title + tags (regex-escaped; no text index needed).
+    const q = (req.query.q || '').trim();
+    if (q) {
+      const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      query.$or = [{ title: rx }, { tags: rx }];
+    }
 
     // Handle "popular" sort with aggregation for better performance
     if (sort === 'popular') {
@@ -132,11 +161,14 @@ router.post('/threads', async (req, res) => {
   try {
     const { title, content, category, tags } = req.body;
 
+    const invalid = validateThread({ title, content, category });
+    if (invalid) return res.status(400).json({ message: invalid });
+
     const thread = new ForumThread({
-      title,
-      content,
+      title: title.trim(),
+      content: content.trim(),
       category,
-      tags,
+      tags: Array.isArray(tags) ? tags : [],
       author: req.user.userId,
       likes: [],
       dislikes: [],
@@ -165,10 +197,13 @@ router.put('/threads/:id', async (req, res) => {
     }
 
     const { title, content, category, tags } = req.body;
-    thread.title = title;
-    thread.content = content;
+    const invalid = validateThread({ title, content, category });
+    if (invalid) return res.status(400).json({ message: invalid });
+
+    thread.title = title.trim();
+    thread.content = content.trim();
     thread.category = category;
-    thread.tags = tags;
+    thread.tags = Array.isArray(tags) ? tags : [];
 
     await thread.save();
     await thread.populate('author', 'username');
@@ -215,7 +250,12 @@ router.get('/threads/:id', async (req, res) => {
       return res.status(404).json({ message: 'Thread not found' });
     }
 
-    // Get all comments for this thread
+    // Get all comments for this thread (indexed on { thread, createdAt }), build the full
+    // reply tree, then return a *page* of top-level roots (with their nested replies intact)
+    // so busy threads don't ship hundreds of root comments at once.
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+
     const allComments = await Comment.find({ thread: thread._id })
       .populate('author', 'username')
       .sort({ createdAt: 1 })
@@ -246,12 +286,21 @@ router.get('/threads/:id', async (req, res) => {
       }
     });
 
+    const topLevelTotal = topLevelComments.length;
+    const pagedRoots = topLevelComments.slice((page - 1) * limit, page * limit);
+
     // Ensure thread has likes and dislikes arrays and add score
     thread.likes = thread.likes || [];
     thread.dislikes = thread.dislikes || [];
     thread.score = calculateScore(thread);
 
-    res.json({ thread, comments: topLevelComments });
+    res.json({
+      thread,
+      comments: pagedRoots,
+      commentsPage: page,
+      commentsTotalPages: Math.ceil(topLevelTotal / limit) || 1,
+      topLevelTotal
+    });
   } catch (error) {
     console.error('Error fetching thread:', error);
     res.status(500).json({ message: 'Error fetching thread' });
@@ -316,8 +365,18 @@ router.post('/vote', async (req, res) => {
     await target.save();
 
     const score = calculateScore(target);
+    const threadId = targetType === 'thread' ? targetId : target.thread;
 
-    console.log(`Vote processed: ${targetType} ${targetId}, user: ${userId}, action: ${actionTaken}, score: ${score}`);
+    // Fan out the new tally to everyone viewing this thread.
+    broadcastToThread(threadId, {
+      type: 'vote_updated',
+      threadId: String(threadId),
+      targetType,
+      targetId: String(targetId),
+      score,
+      likes: target.likes.length,
+      dislikes: target.dislikes.length
+    });
 
     res.json({
       success: true,
@@ -339,8 +398,11 @@ router.post('/threads/:id/comments', async (req, res) => {
   try {
     const { content, parentCommentId } = req.body;
 
+    const invalid = validateComment(content);
+    if (invalid) return res.status(400).json({ message: invalid });
+
     const comment = new Comment({
-      content,
+      content: content.trim(),
       author: req.user.userId,
       thread: req.params.id,
       parentComment: parentCommentId || null,
@@ -351,10 +413,19 @@ router.post('/threads/:id/comments', async (req, res) => {
     await comment.save();
     await comment.populate('author', 'username');
 
-    // Update thread's lastActivity and comment count
+    // Update thread's lastActivity and comment count (commentCount is a real field now).
     await ForumThread.findByIdAndUpdate(req.params.id, {
       lastActivity: new Date(),
       $inc: { commentCount: 1 }
+    });
+
+    // Shape the payload like a tree node so subscribers can drop it straight in.
+    const payload = { ...comment.toObject(), score: 0, replies: [] };
+    broadcastToThread(req.params.id, {
+      type: 'comment_created',
+      threadId: String(req.params.id),
+      parentCommentId: parentCommentId || null,
+      comment: payload
     });
 
     res.status(201).json(comment);
@@ -376,10 +447,21 @@ router.put('/comments/:id', async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to update this comment' });
     }
 
-    comment.content = req.body.content;
+    const invalid = validateComment(req.body.content);
+    if (invalid) return res.status(400).json({ message: invalid });
+
+    comment.content = req.body.content.trim();
     comment.isEdited = true;
     await comment.save();
     await comment.populate('author', 'username');
+
+    broadcastToThread(comment.thread, {
+      type: 'comment_updated',
+      threadId: String(comment.thread),
+      commentId: String(comment._id),
+      content: comment.content,
+      isEdited: true
+    });
 
     res.json(comment);
   } catch (error) {
@@ -402,7 +484,8 @@ router.delete('/comments/:id', async (req, res) => {
 
     // Count all comments that will be deleted (including replies)
     const repliesToDelete = await Comment.find({ parentComment: comment._id });
-    const totalCommentsToDelete = 1 + repliesToDelete.length;
+    const deletedIds = [comment._id, ...repliesToDelete.map(r => r._id)].map(String);
+    const totalCommentsToDelete = deletedIds.length;
 
     // Delete all replies to this comment first
     await Comment.deleteMany({ parentComment: comment._id });
@@ -413,7 +496,14 @@ router.delete('/comments/:id', async (req, res) => {
       $inc: { commentCount: -totalCommentsToDelete }
     });
 
-    res.json({ message: 'Comment deleted successfully' });
+    broadcastToThread(comment.thread, {
+      type: 'comment_deleted',
+      threadId: String(comment.thread),
+      commentId: String(comment._id),
+      deletedIds
+    });
+
+    res.json({ message: 'Comment deleted successfully', deletedIds });
   } catch (error) {
     console.error('Error deleting comment:', error);
     res.status(500).json({ message: 'Error deleting comment' });

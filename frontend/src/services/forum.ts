@@ -15,67 +15,109 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-class ForumService {
-  ws: WebSocket | null = null;
-  messageHandlers: Map<string, (data: any) => void> = new Map();
-  threadId: string | null = null;
+type ForumListener = (msg: any) => void;
 
-  connect() {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
-    
+class ForumService {
+  private ws: WebSocket | null = null;
+  private listeners = new Set<ForumListener>();
+  private subscriptions = new Set<string>();
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private shouldConnect = false;
+
+  // ---- realtime ----
+  private connect() {
     const token = authService.getToken();
     if (!token) return;
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
 
+    this.shouldConnect = true;
     this.ws = new WebSocket(`${WS_BASE_URL}?token=${token}`);
-    
+
     this.ws.onopen = () => {
-      // Optionally log connection
+      this.reconnectAttempts = 0;
+      // re-arm any subscriptions after a (re)connect
+      this.subscriptions.forEach((id) => this.send('subscribe_thread', { threadId: id }));
     };
 
     this.ws.onmessage = (event) => {
       try {
-        const message = JSON.parse(event.data);
-        const handler = this.messageHandlers.get(message.type);
-        if (handler) handler(message.data || message);
-      } catch (error) {
-        // Optionally log error
+        const msg = JSON.parse(event.data);
+        this.listeners.forEach((l) => l(msg));
+      } catch {
+        /* ignore malformed frames */
       }
     };
 
     this.ws.onclose = () => {
-      // Optionally handle reconnect
+      this.ws = null;
+      if (this.shouldConnect && (this.subscriptions.size || this.listeners.size)) {
+        this.scheduleReconnect();
+      }
+    };
+
+    this.ws.onerror = () => {
+      try { this.ws?.close(); } catch { /* noop */ }
     };
   }
 
-  onMessage(type: string, handler: (data: any) => void) {
-    this.messageHandlers.set(type, handler);
-    this.connect();
+  // Exponential backoff (1s → 2s → 4s … capped at 30s).
+  private scheduleReconnect() {
+    if (this.reconnectTimer) return;
+    const delay = Math.min(30_000, 1000 * 2 ** this.reconnectAttempts);
+    this.reconnectAttempts += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, delay);
   }
 
-  subscribeToThread(threadId: string) {
-    this.connect();
-    this.threadId = threadId;
-    this.sendMessage('subscribe_thread', { threadId });
-  }
-
-  unsubscribeFromThread(threadId: string) {
-    this.sendMessage('unsubscribe_thread', { threadId });
-    this.threadId = null;
-  }
-
-  sendMessage(type: string, data: any) {
+  private send(type: string, data: Record<string, unknown>) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type, ...data }));
     }
   }
 
-  async getThreads(params: any) {
+  // Register a raw message listener; returns an unsubscribe fn. Opens the socket on demand.
+  addListener(fn: ForumListener): () => void {
+    this.listeners.add(fn);
+    this.connect();
+    return () => {
+      this.listeners.delete(fn);
+      if (!this.listeners.size && !this.subscriptions.size) this.disconnect();
+    };
+  }
+
+  subscribeToThread(threadId: string) {
+    this.subscriptions.add(threadId);
+    this.connect();
+    this.send('subscribe_thread', { threadId });
+  }
+
+  unsubscribeFromThread(threadId: string) {
+    this.subscriptions.delete(threadId);
+    this.send('unsubscribe_thread', { threadId });
+    if (!this.listeners.size && !this.subscriptions.size) this.disconnect();
+  }
+
+  private disconnect() {
+    this.shouldConnect = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    try { this.ws?.close(); } catch { /* noop */ }
+    this.ws = null;
+  }
+
+  // ---- REST ----
+  async getThreads(params: Record<string, unknown>) {
     const res = await api.get('/threads', { params });
     return res.data;
   }
 
-  async getThread(id: string) {
-    const res = await api.get(`/threads/${id}`);
+  async getThread(id: string, params?: Record<string, unknown>) {
+    const res = await api.get(`/threads/${id}`, { params });
     return res.data;
   }
 
@@ -99,8 +141,8 @@ class ForumService {
     return res.data;
   }
 
-  async updateComment(id: string, data: any) {
-    const res = await api.put(`/comments/${id}`, data);
+  async updateComment(id: string, content: string) {
+    const res = await api.put(`/comments/${id}`, { content });
     return res.data;
   }
 

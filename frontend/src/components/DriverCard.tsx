@@ -1,199 +1,120 @@
-import React, { useEffect } from 'react';
-import { User, Trophy, Award, Star, TrendingUp } from 'lucide-react';
+import { memo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Trophy, Award, Star, ArrowUpRight } from 'lucide-react';
+import { driverColor } from '@/lib/f1-colors';
 
 interface DriverCardProps {
+  rank: number; // championship position (medal + watermark)
   driverNumber: number;
+  driverId?: string | null;
   driverName: string;
+  acronym?: string | null;
   photo: string | null;
   team: string | null;
-  careerRacesWon: number;
-  careerPodiums: number;
-  currentSeasonPoints: number;
-  position: number;
+  teamColor?: string | null;
   nationality: string;
-  isFlipped: boolean;
-  onFlip: () => void;
+  points: number; // season points
+  seasonWins: number; // season wins
+  careerWins: number;
+  careerPodiums: number;
+  careerPoles: number;
+  careerLoading?: boolean;
 }
 
-// Team colors mapping
-const TEAM_COLORS: Record<string, { primary: string; secondary: string; accent: string }> = {
-  'Red Bull Racing': { primary: 'bg-blue-950', secondary: 'bg-blue-900', accent: 'text-blue-300' },
-  'Ferrari': { primary: 'bg-red-900', secondary: 'bg-red-950', accent: 'text-red-300' },
-  'McLaren': { primary: 'bg-orange-900', secondary: 'bg-orange-950', accent: 'text-orange-300' },
-  'Mercedes': { primary: 'bg-teal-900', secondary: 'bg-teal-950', accent: 'text-teal-300' },
-  'Aston Martin': { primary: 'bg-green-900', secondary: 'bg-green-950', accent: 'text-green-300' },
-  'Alpine': { primary: 'bg-blue-900', secondary: 'bg-blue-950', accent: 'text-blue-300' },
-  'Kick Sauber': { primary: 'bg-green-800', secondary: 'bg-green-900', accent: 'text-green-300' },
-  'Williams': { primary: 'bg-blue-900', secondary: 'bg-blue-950', accent: 'text-blue-300' },
-  'Racing Bulls': { primary: 'bg-blue-950', secondary: 'bg-blue-900', accent: 'text-blue-300' },
-  'Haas': { primary: 'bg-gray-800', secondary: 'bg-gray-900', accent: 'text-gray-300' },
+const MEDAL: Record<number, { label: string; class: string }> = {
+  1: { label: 'P1', class: 'bg-yellow-400 text-black' },
+  2: { label: 'P2', class: 'bg-zinc-300 text-black' },
+  3: { label: 'P3', class: 'bg-amber-600 text-white' },
 };
 
-const getTeamColors = (team: string | null) => {
-  if (!team) return { primary: 'bg-gray-800', secondary: 'bg-gray-900', accent: 'text-white' };
-  return TEAM_COLORS[team] || { primary: 'bg-gray-800', secondary: 'bg-gray-900', accent: 'text-white' };
-};
-
-export const DriverCard: React.FC<DriverCardProps> = ({
-  driverNumber,
-  driverName,
-  photo,
-  team,
-  careerRacesWon,
-  careerPodiums,
-  currentSeasonPoints,
-  position,
-  nationality,
-  isFlipped,
-  onFlip
-}) => {
-  const colors = getTeamColors(team);
-  const [firstName, lastName] = driverName.split(' ');
-
-  // CSS styles as objects
-  const flipCardStyle: React.CSSProperties = {
-    perspective: '1000px',
-    height: '320px'
-  };
-
-  const flipCardInnerStyle: React.CSSProperties = {
-    position: 'relative',
-    width: '100%',
-    height: '100%',
-    textAlign: 'center',
-    transition: 'transform 0.6s',
-    transformStyle: 'preserve-3d',
-    transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
-  };
-
-  const flipCardFaceStyle: React.CSSProperties = {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    WebkitBackfaceVisibility: 'hidden',
-    backfaceVisibility: 'hidden'
-  };
-
-  const flipCardBackStyle: React.CSSProperties = {
-    ...flipCardFaceStyle,
-    transform: 'rotateY(180deg)'
-  };
-
-  // Auto-flip back after 2 seconds
-  useEffect(() => {
-    if (isFlipped) {
-      const timer = setTimeout(() => {
-        onFlip();
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [isFlipped, onFlip]);
-
+function Avatar({ photo, name, color }: { photo: string | null; name: string; color: string }) {
+  const [broken, setBroken] = useState(false);
+  const initials = name.split(' ').map((p) => p[0]).slice(0, 2).join('');
+  if (!photo || broken) {
+    return (
+      <div className="h-20 w-20 rounded-full grid place-items-center text-xl font-black text-white"
+        style={{ background: color }}>
+        {initials}
+      </div>
+    );
+  }
   return (
-    <div className="cursor-pointer" style={flipCardStyle} onClick={onFlip}>
-      <div style={flipCardInnerStyle}>
-        
-        {/* Front of card - Driver Info */}
-        <div 
-          className={`relative rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl flex flex-col justify-center items-center ${colors.primary}`}
-          style={flipCardFaceStyle}
-        >
-          {/* Centered Driver Name with Team Color */}
-          <div className="flex flex-col items-center justify-center h-full w-full">
-            <h3 className={`font-bold text-2xl mb-2 ${colors.accent}`}>{firstName} {lastName}</h3>
-            <span className={`font-semibold text-lg mb-1 ${colors.accent}`}>{team}</span>
-            <span className="text-white/80 text-sm font-medium mb-2">{nationality}</span>
-            <div className="text-3xl font-bold text-white opacity-90 mb-2">
-              #{driverNumber}
-            </div>
-            <div className="text-center bg-black/40 rounded-lg p-3 w-40 mx-auto mb-2">
-              <div className="text-2xl font-bold text-white">{currentSeasonPoints}</div>
-              <div className="text-sm text-white/80">Points</div>
-              <div className="text-xs text-white/60 mt-1">Position: P{position}</div>
-            </div>
-            <span className="inline-block bg-gray-200 text-black text-xs font-semibold px-3 py-1 rounded-full shadow mt-2">
-              Click to view stats
-            </span>
+    <img
+      src={photo}
+      alt={name}
+      loading="lazy"
+      decoding="async"
+      onError={() => setBroken(true)}
+      className="h-20 w-20 rounded-full object-cover object-top bg-white"
+      style={{ boxShadow: `0 0 0 3px ${color}` }}
+    />
+  );
+}
+
+const Stat = ({ icon, value, label, loading }: { icon: React.ReactNode; value: number; label: string; loading?: boolean }) => (
+  <div className="text-center">
+    <div className="flex items-center justify-center gap-1 text-base font-bold">
+      {icon}
+      {loading ? '…' : value}
+    </div>
+    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+  </div>
+);
+
+export const DriverCard = memo(function DriverCard({
+  rank, driverNumber, driverId, driverName, photo, team, teamColor, nationality,
+  points, seasonWins, careerWins, careerPodiums, careerPoles, careerLoading = false,
+}: DriverCardProps) {
+  const color = driverColor(teamColor);
+  const medal = MEDAL[rank];
+  const inner = (
+    <div className="group relative overflow-hidden rounded-xl border bg-card transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+      {/* team-colour header with avatar */}
+      <div className="relative px-4 pt-4 pb-3" style={{ background: `linear-gradient(135deg, ${color}26, transparent 70%)` }}>
+        <span className="absolute -top-3 -left-1 text-7xl font-black leading-none text-foreground/5 select-none">{rank}</span>
+        <div className="relative flex items-center gap-3">
+          <Avatar photo={photo} name={driverName} color={color} />
+          <div className="min-w-0">
+            <div className="text-3xl font-black leading-none" style={{ color }}>#{driverNumber}</div>
+            <div className="mt-1 text-xs text-muted-foreground truncate">{nationality}</div>
           </div>
+          {medal && (
+            <span className={`absolute top-0 right-0 text-[11px] font-bold px-2 py-0.5 rounded-full ${medal.class}`}>
+              {medal.label}
+            </span>
+          )}
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 h-1" style={{ background: color }} />
+      </div>
+
+      {/* body */}
+      <div className="p-4">
+        <h3 className="text-lg font-bold leading-tight flex items-center gap-1 group-hover:text-red-600 transition-colors">
+          {driverName}
+          {driverId && <ArrowUpRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />}
+        </h3>
+        <p className="text-xs text-muted-foreground mb-3">{team}</p>
+
+        <div className="flex items-end justify-between mb-3">
+          <div>
+            <span className="text-3xl font-black tabular-nums">{points}</span>
+            <span className="text-xs text-muted-foreground ml-1">PTS</span>
+          </div>
+          {seasonWins > 0 && (
+            <span className="text-xs font-semibold text-muted-foreground">{seasonWins} win{seasonWins > 1 ? 's' : ''} this year</span>
+          )}
         </div>
 
-        {/* Back of card - Statistics */}
-        <div 
-          className={`relative rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl ${colors.secondary} text-white`}
-          style={flipCardBackStyle}
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-black/20 to-black/40"></div>
-          
-          <div className="relative z-10 p-4 h-full flex flex-col">
-            {/* Header */}
-            <div className="text-center mb-4 border-b border-white/20 pb-3">
-              <h3 className="font-bold text-lg">{firstName} {lastName}</h3>
-              <p className="text-sm opacity-80">#{driverNumber} • {team}</p>
-              <p className="text-xs opacity-60">{nationality}</p>
-            </div>
-            
-            {/* Career Statistics */}
-            <div className="flex-1 space-y-4">
-              <div>
-                <h4 className="font-semibold text-sm mb-3 flex items-center">
-                  <Trophy className="h-4 w-4 mr-2" />
-                  Career Statistics
-                </h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white/10 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-yellow-400">{careerRacesWon}</div>
-                    <div className="text-xs opacity-80">Race Wins</div>
-                  </div>
-                  <div className="bg-white/10 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-orange-400">{careerPodiums}</div>
-                    <div className="text-xs opacity-80">Podiums</div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="border-t border-white/20 pt-3">
-                <h4 className="font-semibold text-sm mb-3 flex items-center">
-                  <Star className="h-4 w-4 mr-2" />
-                  Season Summary
-                </h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center bg-white/10 rounded p-2">
-                    <span className="text-sm">Championship Points:</span>
-                    <span className="font-bold text-lg text-green-400">{currentSeasonPoints}</span>
-                  </div>
-                  <div className="flex justify-between items-center bg-white/10 rounded p-2">
-                    <span className="text-sm">Current Position:</span>
-                    <span className="font-bold text-lg">P{position}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Performance Indicators */}
-              <div className="border-t border-white/20 pt-3">
-                <h4 className="font-semibold text-sm mb-2 flex items-center">
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  Performance
-                </h4>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="text-center">
-                    <div className="font-bold text-sm">{careerPodiums > 0 ? ((careerRacesWon / careerPodiums) * 100).toFixed(0) + '%' : '0%'}</div>
-                    <div className="opacity-60">Win Rate</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="font-bold text-sm">{position <= 10 ? 'Points' : 'No Points'}</div>
-                    <div className="opacity-60">Status</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Footer */}
-            <div className="mt-auto pt-3 text-center border-t border-white/20">
-              <p className="text-xs opacity-60">Click to flip back</p>
-            </div>
-          </div>
+        <div className="grid grid-cols-3 gap-2 pt-3 border-t">
+          <Stat icon={<Trophy className="h-4 w-4 text-yellow-500" />} value={careerWins} label="Wins" loading={careerLoading} />
+          <Stat icon={<Award className="h-4 w-4 text-orange-500" />} value={careerPodiums} label="Podiums" loading={careerLoading} />
+          <Stat icon={<Star className="h-4 w-4 text-purple-500" />} value={careerPoles} label="Poles" loading={careerLoading} />
         </div>
       </div>
     </div>
   );
-};
+
+  return driverId ? <Link to={`/driver/${driverId}`} className="block">{inner}</Link> : inner;
+});
+
+export default DriverCard;

@@ -1,470 +1,304 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { forumService } from '@/services/forum';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+  useThreads,
+  useCreateThread,
+  useVote,
+  toggleVote,
+  type ThreadsResponse,
+  type ForumThreadSummary,
+} from '@/hooks/useForumQueries';
+import { Card, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  ThumbsUp,
-  ThumbsDown,
-  MessageSquare,
-  Eye,
-  Clock,
-  Plus,
-  TrendingUp,
-} from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
+import { ThumbsUp, ThumbsDown, MessageSquare, Clock, Plus, TrendingUp, Activity, Search } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
-interface Thread {
-  _id: string;
-  title: string;
-  content: string;
-  author: {
-    _id: string;
-    username: string;
-  };
-  category: string;
-  tags: string[];
-  likes: string[];
-  dislikes: string[];
-  views: number;
-  commentCount: number;
-  createdAt: string;
-  lastActivity: string;
-  score?: number;
-}
+const CATEGORIES = ['General', 'Race Discussion', 'Technical', 'News', 'Off-Topic'];
+const SORTS = [
+  { key: 'newest', label: 'Latest', icon: Clock },
+  { key: 'popular', label: 'Most Liked', icon: TrendingUp },
+  { key: 'lastActivity', label: 'Active', icon: Activity },
+];
 
 const Forum = () => {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [threads, setThreads] = useState<Thread[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
+  const queryClient = useQueryClient();
+
+  const [sort, setSort] = useState('newest');
+  const [category, setCategory] = useState('all');
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [newThread, setNewThread] = useState({
-    title: '',
-    content: '',
-    category: 'General',
-    tags: ''
-  });
-  const [voteTooltip, setVoteTooltip] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newThread, setNewThread] = useState({ title: '', content: '', category: 'General', tags: '' });
 
+  // debounce the search box so we don't fire a request per keystroke
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      navigate('/login');
-    }
-  }, [isAuthenticated, isLoading, navigate]);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    fetchThreads();
-  }, [isAuthenticated, sortBy, page]);
+  const params = useMemo(
+    () => ({
+      page,
+      limit: 10,
+      sort,
+      ...(category !== 'all' ? { category } : {}),
+      ...(debouncedSearch ? { q: debouncedSearch } : {}),
+    }),
+    [page, sort, category, debouncedSearch]
+  );
 
-  const fetchThreads = async () => {
-    try {
-      setLoading(true);
-      const response = await forumService.getThreads({
-        page,
-        limit: 10,
-        sort: sortBy === 'latest' ? 'newest' : 'popular'
-      });
-      setThreads(response.threads);
-      setTotalPages(response.totalPages);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load threads');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  const { data, isLoading, isError } = useThreads(params);
+  const threads = data?.threads ?? [];
+  const totalPages = data?.totalPages ?? 1;
+
+  const createMut = useCreateThread();
+  const voteMut = useVote();
+
+  // reset to page 1 whenever a filter changes
+  const onFilterChange = (fn: () => void) => {
+    fn();
+    setPage(1);
   };
 
-  const handleCreateThread = async () => {
-    try {
-      const tags = newThread.tags.split(',').map(tag => tag.trim()).filter(Boolean);
-      await forumService.createThread({
-        ...newThread,
-        tags
-      });
-      setIsCreateDialogOpen(false);
-      setNewThread({ title: '', content: '', category: 'General', tags: '' });
-      fetchThreads();
-    } catch (err) {
-      console.error('Error creating thread:', err);
-    }
+  const handleCreate = () => {
+    const tags = newThread.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    createMut.mutate(
+      { title: newThread.title, content: newThread.content, category: newThread.category, tags },
+      {
+        onSuccess: () => {
+          setIsCreateOpen(false);
+          setNewThread({ title: '', content: '', category: 'General', tags: '' });
+        },
+      }
+    );
   };
 
-  const showVoteTooltip = (msg: string) => {
-    setVoteTooltip(msg);
-    setTimeout(() => setVoteTooltip(null), 2000);
-  };
-
-  const handleVote = async (threadId: string, voteType: 'like' | 'dislike') => {
+  const handleVote = (thread: ForumThreadSummary, voteType: 'like' | 'dislike') => {
     if (!user) {
-      showVoteTooltip('Please login to vote');
+      toast.error('Please log in to vote');
       return;
     }
-
-    const threadIndex = threads.findIndex(t => t._id === threadId);
-    if (threadIndex === -1) return;
-
-    const thread = threads[threadIndex];
-    const likes = thread.likes || [];
-    const dislikes = thread.dislikes || [];
-    const hasLiked = likes.includes(user.id);
-    const hasDisliked = dislikes.includes(user.id);
-
-    // Optimistic update - create new arrays without mutating originals
-    let newLikes = [...likes];
-    let newDislikes = [...dislikes];
-
-    // Remove user from both arrays first
-    newLikes = newLikes.filter(id => id !== user.id);
-    newDislikes = newDislikes.filter(id => id !== user.id);
-
-    // Check if user is toggling off the same vote
-    const isTogglingOff = (voteType === 'like' && hasLiked) || (voteType === 'dislike' && hasDisliked);
-
-    if (!isTogglingOff) {
-      // Add new vote
-      if (voteType === 'like') {
-        newLikes.push(user.id);
-        showVoteTooltip('Liked!');
-      } else {
-        newDislikes.push(user.id);
-        showVoteTooltip('Disliked!');
-      }
-    } else {
-      showVoteTooltip('Vote removed');
-    }
-
-    // Update the thread with new arrays
-    const updatedThreads = [...threads];
-    const updatedThread = {
-      ...thread,
-      likes: newLikes,
-      dislikes: newDislikes,
-      score: newLikes.length - newDislikes.length
-    };
-    updatedThreads[threadIndex] = updatedThread;
-    setThreads(updatedThreads);
-
-    try {
-      await forumService.vote({
-        targetType: 'thread',
-        targetId: threadId,
-        voteType
-      });
-    } catch (err) {
-      // Revert on error
-      fetchThreads();
-      console.error('Error voting:', err);
-      showVoteTooltip('Failed to vote');
-    }
-  };
-
-  const getVoteScore = (thread: Thread) => {
-    const likes = thread.likes || [];
-    const dislikes = thread.dislikes || [];
-    return thread.score !== undefined ? thread.score : (likes.length - dislikes.length);
-  };
-
-  const hasUserVoted = (thread: Thread, voteType: 'like' | 'dislike') => {
-    if (!user) return false;
-    const targetArray = voteType === 'like' ? (thread.likes || []) : (thread.dislikes || []);
-    return targetArray.includes(user.id);
-  };
-
-  if (isLoading) return <div>Loading...</div>;
-  if (!isAuthenticated) return null;
-
-  if (loading && threads.length === 0) {
-    return (
-      <div className="space-y-4">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <Card key={i}>
-            <CardContent className="p-6">
-              <Skeleton className="h-4 w-3/4 mb-2" />
-              <Skeleton className="h-4 w-1/2" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+    // optimistic across all cached list pages
+    queryClient.setQueriesData<ThreadsResponse>({ queryKey: ['forum', 'threads'] }, (prev) =>
+      prev
+        ? {
+            ...prev,
+            threads: prev.threads.map((t) =>
+              t._id === thread._id ? { ...t, ...toggleVote(t.likes, t.dislikes, user.id, voteType) } : t
+            ),
+          }
+        : prev
     );
-  }
+    voteMut.mutate(
+      { targetType: 'thread', targetId: thread._id, voteType },
+      { onError: () => queryClient.invalidateQueries({ queryKey: ['forum', 'threads'] }) }
+    );
+  };
+
+  const scoreOf = (t: ForumThreadSummary) => t.score ?? (t.likes?.length ?? 0) - (t.dislikes?.length ?? 0);
+  const voted = (t: ForumThreadSummary, type: 'like' | 'dislike') =>
+    !!user && (type === 'like' ? t.likes : t.dislikes)?.includes(user.id);
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6 bg-gray-950/30 rounded-xl shadow-lg">
-      {/* Header */}
-      <div className="text-center space-y-2">
-        <h1 className="text-4xl font-bold text-white" style={{ fontFamily: '"Orbitron", "Montserrat", "Arial Black", sans-serif' }}>
-          Pit Lane Chat
-        </h1>
-        <p className="text-lg text-white">
-          The Ultimate Forum for F1 Fans to Discuss, Debate, and Share Their Passion for Racing
-        </p>
-      </div>
-
-      {/* Sort & Create Thread Section */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <span className="text-sm font-medium text-white">Sort by:</span>
-          <Button
-            variant={sortBy === 'latest' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSortBy('latest')}
-          >
-            <Clock className="w-4 h-4 mr-1" />
-            Latest
-          </Button>
-          <Button
-            variant={sortBy === 'popular' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSortBy('popular')}
-          >
-            <TrendingUp className="w-4 h-4 mr-1" />
-            Most Liked
-          </Button>
+    <div className="min-h-screen bg-background">
+      {/* Hero — matches the site theme */}
+      <div className="bg-gradient-to-br from-zinc-900 via-black to-zinc-900 text-white">
+        <div className="container mx-auto px-4 py-12">
+          <h1 className="text-4xl md:text-5xl font-bold">
+            PIT LANE <span className="text-red-600">CHAT</span>
+          </h1>
+          <p className="text-zinc-300 mt-2">Discuss, debate, and share your passion for racing.</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-red-600 hover:bg-red-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Thread
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Create New Thread</DialogTitle>
-              <DialogDescription>
-                Start a new discussion in the forum
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Title</label>
-                <Input
-                  value={newThread.title}
-                  onChange={(e) => setNewThread({ ...newThread, title: e.target.value })}
-                  placeholder="Enter thread title..."
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Category</label>
-                <Select
-                  value={newThread.category}
-                  onValueChange={(value) => setNewThread({ ...newThread, category: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="General">General</SelectItem>
-                    <SelectItem value="Race Discussion">Race Discussion</SelectItem>
-                    <SelectItem value="Technical">Technical</SelectItem>
-                    <SelectItem value="News">News</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Content</label>
-                <Textarea
-                  value={newThread.content}
-                  onChange={(e) => setNewThread({ ...newThread, content: e.target.value })}
-                  placeholder="Share your thoughts..."
-                  className="min-h-[120px]"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Tags (optional)</label>
-                <Input
-                  value={newThread.tags}
-                  onChange={(e) => setNewThread({ ...newThread, tags: e.target.value })}
-                  placeholder="Separate tags with commas"
-                />
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleCreateThread}>Create Thread</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
 
-      {/* Threads List */}
-      <div className="space-y-4">
-        {threads.map((thread) => {
-          const score = getVoteScore(thread);
-          const hasLiked = hasUserVoted(thread, 'like');
-          const hasDisliked = hasUserVoted(thread, 'dislike');
-
-          return (
-            <Card key={thread._id} className="hover:shadow-md transition-shadow bg-red-900/10 border-red-800/30">
-              <CardContent className="p-6">
-                <div className="flex space-x-4">
-                  {/* Vote Section - Fixed alignment */}
-                  <div className="flex flex-col items-center space-y-1 min-w-[60px]">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleVote(thread._id, 'like')}
-                      className={`p-2 rounded-full transition-colors ${
-                        hasLiked
-                          ? 'bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900 dark:text-green-400'
-                          : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <ThumbsUp className="w-4 h-4" />
-                    </Button>
-                    <span className={`text-sm font-medium ${
-                      score > 0 ? 'text-green-600' : score < 0 ? 'text-red-600' : 'text-white'
-                    }`}>
-                      {score}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleVote(thread._id, 'dislike')}
-                      className={`p-2 rounded-full transition-colors ${
-                        hasDisliked
-                          ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900 dark:text-red-400'
-                          : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <ThumbsDown className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  {/* Thread Content */}
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="secondary">{thread.category}</Badge>
-                      <span className="text-sm text-gray-300">
-                        by {thread.author.username}
-                      </span>
-                      <span className="text-sm text-gray-400">•</span>
-                      <span className="text-sm text-gray-300">
-                        {formatDistanceToNow(new Date(thread.createdAt), { addSuffix: true })}
-                      </span>
-                    </div>
-
-                    <div
-                      className="cursor-pointer"
-                      onClick={() => navigate(`/forum/thread/${thread._id}`)}
-                    >
-                      {/* Thread title and content in white */}
-                      <h3 className="text-xl font-semibold text-white hover:text-red-600 dark:hover:text-red-400 transition-colors" style={{ fontFamily: '"Orbitron", "Montserrat", "Arial Black", sans-serif' }}>
-                        {thread.title}
-                      </h3>
-                      {thread.content && (
-                        <p className="text-white mt-2">
-                          {thread.content.length > 150
-                            ? `${thread.content.substring(0, 150)}...`
-                            : thread.content}
-                        </p>
-                      )}
-                    </div>
-
-                    {thread.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {thread.tags.slice(0, 3).map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex items-center space-x-4 text-sm text-gray-400">
-                      <div className="flex items-center space-x-1">
-                        <MessageSquare className="w-4 h-4" />
-                        <span>{thread.commentCount} Comment down your thoughts</span>
-                      </div>
-                      {/* <div className="flex items-center space-x-1">
-                        <Eye className="w-4 h-4" />
-                        <span>{thread.views} views</span>
-                      </div> */}
-                    </div>
-                  </div>
+      <div className="container mx-auto px-4 py-8 space-y-6">
+        {/* Controls */}
+        <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+          <div className="relative lg:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search threads or tags…"
+              className="pl-9"
+            />
+          </div>
+          <Select value={category} onValueChange={(v) => onFilterChange(() => setCategory(v))}>
+            <SelectTrigger className="lg:w-52"><SelectValue placeholder="All categories" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <div className="flex flex-wrap gap-2">
+            {SORTS.map((s) => (
+              <Button
+                key={s.key}
+                size="sm"
+                variant={sort === s.key ? 'default' : 'outline'}
+                onClick={() => onFilterChange(() => setSort(s.key))}
+              >
+                <s.icon className="w-4 h-4 mr-1" />
+                {s.label}
+              </Button>
+            ))}
+          </div>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-red-600 hover:bg-red-700 lg:ml-auto">
+                <Plus className="w-4 h-4 mr-2" />
+                New Thread
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Create New Thread</DialogTitle>
+                <DialogDescription>Start a new discussion in the forum</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">Title</label>
+                  <Input
+                    value={newThread.title}
+                    onChange={(e) => setNewThread({ ...newThread, title: e.target.value })}
+                    placeholder="Enter thread title…"
+                    maxLength={200}
+                  />
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                <div>
+                  <label className="text-sm font-medium">Category</label>
+                  <Select value={newThread.category} onValueChange={(v) => setNewThread({ ...newThread, category: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Content</label>
+                  <Textarea
+                    value={newThread.content}
+                    onChange={(e) => setNewThread({ ...newThread, content: e.target.value })}
+                    placeholder="Share your thoughts…"
+                    className="min-h-[120px]"
+                    maxLength={10000}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Tags (optional)</label>
+                  <Input
+                    value={newThread.tags}
+                    onChange={(e) => setNewThread({ ...newThread, tags: e.target.value })}
+                    placeholder="Separate tags with commas"
+                  />
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                  <Button
+                    onClick={handleCreate}
+                    disabled={createMut.isPending || !newThread.title.trim() || !newThread.content.trim()}
+                  >
+                    {createMut.isPending ? 'Creating…' : 'Create Thread'}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* List */}
+        {isLoading ? (
+          <div className="space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <Card key={i}><CardContent className="p-6"><Skeleton className="h-5 w-3/4 mb-3" /><Skeleton className="h-4 w-1/2" /></CardContent></Card>
+            ))}
+          </div>
+        ) : isError ? (
+          <Card><CardContent className="p-8 text-center text-muted-foreground">Couldn’t load the forum. Please try again.</CardContent></Card>
+        ) : threads.length === 0 ? (
+          <div className="text-center py-16">
+            <h3 className="text-lg font-semibold mb-2">No threads found</h3>
+            <p className="text-muted-foreground mb-4">
+              {search || category !== 'all' ? 'Try a different search or category.' : 'Be the first to start a discussion!'}
+            </p>
+            <Button onClick={() => setIsCreateOpen(true)} className="bg-red-600 hover:bg-red-700">
+              <Plus className="w-4 h-4 mr-2" /> Create First Thread
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {threads.map((thread) => {
+              const score = scoreOf(thread);
+              return (
+                <Card key={thread._id} className="transition-all hover:shadow-md hover:border-red-500/40">
+                  <CardContent className="p-5">
+                    <div className="flex gap-4">
+                      {/* votes */}
+                      <div className="flex flex-col items-center gap-1 min-w-[48px]">
+                        <Button variant="ghost" size="icon" className={`h-8 w-8 rounded-full ${voted(thread, 'like') ? 'bg-green-500/15 text-green-500' : ''}`} onClick={() => handleVote(thread, 'like')}>
+                          <ThumbsUp className="w-4 h-4" />
+                        </Button>
+                        <span className={`text-sm font-bold tabular-nums ${score > 0 ? 'text-green-500' : score < 0 ? 'text-red-500' : ''}`}>{score}</span>
+                        <Button variant="ghost" size="icon" className={`h-8 w-8 rounded-full ${voted(thread, 'dislike') ? 'bg-red-500/15 text-red-500' : ''}`} onClick={() => handleVote(thread, 'dislike')}>
+                          <ThumbsDown className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      {/* content */}
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                          <Badge variant="secondary">{thread.category}</Badge>
+                          <span>by {thread.author?.username ?? 'unknown'}</span>
+                          <span>•</span>
+                          <span>{formatDistanceToNow(new Date(thread.createdAt), { addSuffix: true })}</span>
+                        </div>
+                        <button className="text-left w-full" onClick={() => navigate(`/forum/thread/${thread._id}`)}>
+                          <h3 className="text-lg font-bold leading-snug hover:text-red-600 transition-colors">{thread.title}</h3>
+                          {thread.content && (
+                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{thread.content}</p>
+                          )}
+                        </button>
+                        {thread.tags?.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {thread.tags.slice(0, 4).map((tag) => <Badge key={tag} variant="outline" className="text-xs">#{tag}</Badge>)}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground pt-1">
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          <span>{thread.commentCount ?? 0} {thread.commentCount === 1 ? 'comment' : 'comments'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Previous</Button>
+            <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next</Button>
+          </div>
+        )}
       </div>
-
-      {/* Vote Tooltip */}
-      {voteTooltip && (
-        <div className="fixed bottom-4 right-4 bg-black text-white px-3 py-2 rounded-md text-sm z-50">
-          {voteTooltip}
-        </div>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1}
-          >
-            Previous
-          </Button>
-          <span className="text-sm">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-          >
-            Next
-          </Button>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {threads.length === 0 && !loading && (
-        <div className="text-center py-12">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            No threads found
-          </h3>
-          <p className="text-gray-500 mb-4">Be the first to start a discussion!</p>
-          <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-red-600 hover:bg-red-700">
-            Create First Thread
-          </Button>
-        </div>
-      )}
     </div>
   );
 };

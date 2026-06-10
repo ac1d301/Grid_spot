@@ -2,11 +2,16 @@ const WebSocket = require('ws');
 const jwt = require('jsonwebtoken');
 const { ForumThread, Comment } = require('./models/forum');
 
+// Module-level handle to the live server so the REST routes can push real-time
+// updates without an import cycle (see broadcastToThread export at the bottom).
+let instance = null;
+
 class WebSocketServer {
   constructor(server) {
     this.wss = new WebSocket.Server({ server });
     this.clients = new Map(); // Map to store client connections with their user info
     this.setupWebSocket();
+    instance = this;
   }
 
   setupWebSocket() {
@@ -101,34 +106,17 @@ class WebSocketServer {
     }
   }
 
-  async handleSubscribeThread(ws, threadId) {
-    const user = this.clients.get(ws);
+  // Just registers interest in a thread's live updates. The client loads the thread's
+  // content over REST (React Query); the socket only carries deltas. (threadId stored as a
+  // string so it matches the string ids the REST routes broadcast with.)
+  handleSubscribeThread(ws, threadId) {
     ws.threadSubscriptions = ws.threadSubscriptions || new Set();
-    ws.threadSubscriptions.add(threadId);
-    
-    // Send current thread data
-    const thread = await ForumThread.findById(threadId)
-      .populate('author', 'username')
-      .populate({
-        path: 'comments',
-        populate: {
-          path: 'author',
-          select: 'username'
-        }
-      });
-
-    if (thread) {
-      ws.send(JSON.stringify({
-        type: 'thread_data',
-        threadId,
-        data: thread
-      }));
-    }
+    ws.threadSubscriptions.add(String(threadId));
   }
 
   handleUnsubscribeThread(ws, threadId) {
     if (ws.threadSubscriptions) {
-      ws.threadSubscriptions.delete(threadId);
+      ws.threadSubscriptions.delete(String(threadId));
     }
   }
 
@@ -208,34 +196,36 @@ class WebSocketServer {
       throw new Error('Target not found');
     }
 
-    // Remove existing votes
-    target.upvotes = target.upvotes.filter(id => id.toString() !== user.userId);
-    target.downvotes = target.downvotes.filter(id => id.toString() !== user.userId);
-
-    // Add new vote
-    if (voteType === 'up') {
-      target.upvotes.push(user.userId);
-    } else if (voteType === 'down') {
-      target.downvotes.push(user.userId);
+    // Schema stores likes/dislikes (not upvotes/downvotes). Toggle the user's vote.
+    target.likes = (target.likes || []).filter(id => id.toString() !== user.userId);
+    target.dislikes = (target.dislikes || []).filter(id => id.toString() !== user.userId);
+    if (voteType === 'like') {
+      target.likes.push(user.userId);
+    } else if (voteType === 'dislike') {
+      target.dislikes.push(user.userId);
     }
 
     await target.save();
 
+    const threadId = targetType === 'thread' ? targetId : target.thread;
     this.broadcast({
-      type: 'vote_update',
+      type: 'vote_updated',
       targetType,
       targetId,
-      score: target.score,
-      threadId: targetType === 'thread' ? targetId : target.thread
-    }, targetType === 'thread' ? targetId : target.thread);
+      score: target.likes.length - target.dislikes.length,
+      likes: target.likes.length,
+      dislikes: target.dislikes.length,
+      threadId: String(threadId)
+    }, threadId);
   }
 
   broadcast(message, threadId) {
+    const key = String(threadId);
     this.wss.clients.forEach(client => {
       if (
         client.readyState === WebSocket.OPEN &&
         client.threadSubscriptions &&
-        client.threadSubscriptions.has(threadId)
+        client.threadSubscriptions.has(key)
       ) {
         client.send(JSON.stringify(message));
       }
@@ -250,4 +240,10 @@ class WebSocketServer {
   }
 }
 
-module.exports = WebSocketServer; 
+module.exports = WebSocketServer;
+
+// Used by the forum REST routes to fan out a real-time delta to everyone subscribed to a
+// thread. No-op until the server is constructed. message = { type, threadId, ...payload }.
+module.exports.broadcastToThread = (threadId, message) => {
+  if (instance) instance.broadcast(message, threadId);
+};

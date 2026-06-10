@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /c/Users/Admin/Documents/Grid_spot/frontend/src && rm -f pages/NewsHistory.tsx && echo \"deleted NewsHistory.tsx\")",
+      "Bash(curl -s -m 60 \"http://localhost:5001/api/standings/drivers?year=2026&career=1\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const o=JSON.parse\\(d\\);o.standings.slice\\(0,3\\).forEach\\(s=>console.log\\('  '+s.familyName,'wins',s.careerWins,'podiums',s.careerPodiums,'poles',s.careerPoles\\)\\)}\\)\")",
+      "Bash(node --check models/forum.js)",
+      "Bash(node --check websocket.js)",
+      "Bash(node --check routes/forum.js)",
+      "Bash(node -e \"const ws=require\\('./websocket'\\); console.log\\('ws is fn:', typeof ws==='function', '| broadcastToThread:', typeof ws.broadcastToThread\\); const r=require\\('./routes/forum'\\); console.log\\('forum routes loaded:', typeof r==='function'\\); const m=require\\('./models/forum'\\); console.log\\('models:', Object.keys\\(m\\).join\\(','\\)\\);\")",
+      "Bash(PORT=5099 timeout 25 node index.js)",
+      "Bash(node scripts/backfillCommentCounts.js)",
+      "Bash(node -e \"const fs=require\\('fs'\\);const t=fs.readFileSync\\('tsconfig.json','utf8'\\);console.log\\(t\\)\")",
+      "Bash(npm install *)",
+      "PowerShell(npx tsc --noEmit -p tsconfig.json; \"EXIT=$LASTEXITCODE\")",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(sort -t'│' -k2 -h)",
+      "Bash(awk '{printf \"%8.0fKB  %s\\\\n\", $5/1024, $9}')",
+      "Bash(node --check index.js)",
+      "Bash(node --check middlewares/cacheControl.js)",
+      "Bash(node --check services/cache.js)",
+      "Bash(git show *)",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const s=require\\('http'\\).createServer\\(\\); console.log\\('closeIdleConnections:', typeof s.closeIdleConnections\\); console.log\\('closeAllConnections:', typeof s.closeAllConnections\\);\")",
+      "Bash(cd /c/Users/Admin/Documents/Grid_spot/backend && grep -rln \"ttlByStatus\\\\|sessionStatus\\\\|sessionMeta\" services/ routes/ 2>/dev/null)",
+      "Read(//c/c/Users/Admin/Documents/Grid_spot/backend/**)",
+      "Bash(node --check routes/session.js)",
+      "Bash(node --check services/openf1.js)",
+      "Bash(node --check services/jolpica.js)",
+      "Bash(node --check services/standings.js)",
+      "Bash(sed -n '1,60p' services/season.js)"
+    ],
+    "additionalDirectories": [
+      "c:\\c\\Users\\Admin\\Documents\\Grid_spot\\frontend\\src\\pages"
+    ]
+  }
+}

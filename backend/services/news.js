@@ -50,12 +50,47 @@ function parse(xml) {
     .filter((x) => x.title && x.link);
 }
 
+// Direct F1-site RSS feeds, used as a fallback. Google News RSS is frequently blocked or
+// throttled from datacenter IPs (e.g. Render) even though it works from home connections;
+// these publisher feeds are reachable from datacenters and parse with the same `parse()`.
+// First non-empty feed wins.
+const FALLBACK_FEEDS = [
+  { url: 'https://www.motorsport.com/rss/f1/news/', source: 'Motorsport.com' },
+  { url: 'https://www.autosport.com/rss/f1/news/', source: 'Autosport' },
+  { url: 'https://www.the-race.com/feed/', source: 'The Race' },
+  { url: 'https://www.racefans.net/feed/', source: 'RaceFans' },
+  { url: 'https://feeds.bbci.co.uk/sport/formula1/rss.xml', source: 'BBC Sport' },
+];
+
+async function fetchFeed(url, timeout = 7000) {
+  const res = await axios.get(url, {
+    timeout,
+    headers: { 'User-Agent': UA, Accept: 'application/rss+xml, application/xml, text/xml, */*' },
+  });
+  return parse(res.data);
+}
+
 async function getNews(category = 'trending', limit = 30) {
   const key = QUERIES[category] ? category : 'trending';
   const cap = Math.min(Math.max(parseInt(limit, 10) || 30, 1), 100);
   const items = await cachedFetch(`news:${key}`, T.NEWS, async () => {
-    const res = await axios.get(feedUrl(QUERIES[key]), { timeout: 7000, headers: { 'User-Agent': UA } });
-    return parse(res.data);
+    // Primary: Google News (best F1 filtering by recency window). Short timeout so a blocked
+    // datacenter IP fails fast and we move on to the publisher feeds.
+    try {
+      const g = await fetchFeed(feedUrl(QUERIES[key]), 6000);
+      if (g.length) return g;
+    } catch {
+      /* Google News unreachable from here — fall through to publisher feeds. */
+    }
+    for (const f of FALLBACK_FEEDS) {
+      try {
+        const feed = await fetchFeed(f.url);
+        if (feed.length) return feed.map((it) => ({ ...it, source: it.source || f.source }));
+      } catch {
+        /* try the next source */
+      }
+    }
+    return [];
   });
   return { category: key, count: items.length, items: items.slice(0, cap) };
 }

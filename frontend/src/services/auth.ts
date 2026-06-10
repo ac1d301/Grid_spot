@@ -37,7 +37,7 @@ class AuthService {
         { username, email, password },
         { 
           headers: { 'Content-Type': 'application/json' },
-          timeout: 10000 // 10 second timeout
+          timeout: 30000 // 30s — tolerate Render free-tier cold starts
         }
       );
       
@@ -77,7 +77,7 @@ class AuthService {
         { email, password },
         { 
           headers: { 'Content-Type': 'application/json' },
-          timeout: 10000 // 10 second timeout
+          timeout: 30000 // 30s — tolerate Render free-tier cold starts
         }
       );
       
@@ -117,7 +117,7 @@ class AuthService {
             Authorization: `Bearer ${this.token}`,
             'Content-Type': 'application/json'
           },
-          timeout: 10000 // 10 second timeout
+          timeout: 30000 // 30s — tolerate Render free-tier cold starts
         }
       );
       

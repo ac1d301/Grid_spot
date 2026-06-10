@@ -20,11 +20,13 @@ const cacheControl = require('./middlewares/cacheControl');
 
 const isProd = process.env.NODE_ENV === 'production';
 
-// Force Node's DNS resolver to use real public DNS servers.
-// On some Windows setups the adapter advertises an empty IPv6 entry (::),
-// which Node's bundled resolver (c-ares) tries first and fails with
-// `querySrv ECONNREFUSED`, breaking mongodb+srv:// SRV lookups.
-dns.setServers(['8.8.8.8', '1.1.1.1']);
+// Windows-only DNS workaround: some local Windows setups advertise an empty IPv6 entry (::),
+// which Node's bundled resolver (c-ares) tries first and fails with `querySrv ECONNREFUSED`,
+// breaking mongodb+srv:// SRV lookups. On Linux hosts (Render, etc.) the platform resolver
+// works fine and forcing public resolvers can hurt, so scope this to Windows.
+if (process.platform === 'win32') {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+}
 
 // IMPORTANT: Declare app before using it
 const app = express();
@@ -94,15 +96,26 @@ app.use('/api/', apiLimiter);
 // Public, cacheable F1 read endpoints → set Cache-Control (browsers/CDN absorb repeat reads).
 app.use('/api', cacheControl);
 
-// Database connection — bounded pool + fast failure so requests don't hang on a stalled DB.
-mongoose.connect(process.env.MONGODB_URI, {
-  maxPoolSize: 20,
-  minPoolSize: 2,
-  serverSelectionTimeoutMS: 8000,
-  socketTimeoutMS: 45000,
-})
-  .then(() => console.log(' Connected to MongoDB'))
-  .catch(err => console.error(' MongoDB connection error:', err));
+// Database connection — bounded pool, and KEEP RETRYING on failure so the server recovers on
+// its own once MongoDB becomes reachable (e.g. after fixing the Atlas IP allow-list) without a
+// manual redeploy. A generous server-selection timeout tolerates cold/remote network latency.
+async function connectMongo() {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      maxPoolSize: 20,
+      minPoolSize: 2,
+      serverSelectionTimeoutMS: 20000,
+      socketTimeoutMS: 45000,
+    });
+    console.log(' Connected to MongoDB');
+  } catch (err) {
+    console.error(' MongoDB connection error:', err.message, '— retrying in 5s');
+    setTimeout(connectMongo, 5000);
+  }
+}
+connectMongo();
+mongoose.connection.on('error', (e) => console.error(' MongoDB error:', e.message));
+mongoose.connection.on('disconnected', () => console.warn(' MongoDB disconnected'));
 
 // Routes
 app.use('/api/auth', authLimiter, authRoutes);

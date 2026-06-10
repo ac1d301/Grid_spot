@@ -54,7 +54,7 @@ async function getNews(category = 'trending', limit = 30) {
   const key = QUERIES[category] ? category : 'trending';
   const cap = Math.min(Math.max(parseInt(limit, 10) || 30, 1), 100);
   const items = await cachedFetch(`news:${key}`, T.NEWS, async () => {
-    const res = await axios.get(feedUrl(QUERIES[key]), { timeout: 10000, headers: { 'User-Agent': UA } });
+    const res = await axios.get(feedUrl(QUERIES[key]), { timeout: 7000, headers: { 'User-Agent': UA } });
     return parse(res.data);
   });
   return { category: key, count: items.length, items: items.slice(0, cap) };
